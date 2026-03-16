@@ -148,6 +148,41 @@ spec:
       /api/shipments/{id}:
         get:
           summary: Get shipment status
+      /api/shipments/{id}/timeline:
+        get:
+          summary: Get ordered status timeline for a shipment
+          parameters:
+            - name: id
+              in: path
+              required: true
+              schema:
+                type: string
+          responses:
+            "200":
+              description: Shipment timeline
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      shipmentId:
+                        type: string
+                      events:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            status:
+                              type: string
+                            description:
+                              type: string
+                            occurredAt:
+                              type: string
+                              format: date-time
+                            location:
+                              type: string
+            "404":
+              description: Shipment not found
 ---
 # --- Veyor gRPC API ---
 apiVersion: backstage.io/v1alpha1

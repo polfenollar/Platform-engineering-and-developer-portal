@@ -1,0 +1,23 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: literature-synthesis-agent
+  description: LangGraph agent that retrieves and synthesises biomedical evidence from PubMed and ClinicalTrials.gov
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    langsmith.io/project: "literature-synthesis-agent"
+  tags:
+    - golden-path
+    - ai-agent
+    - langgraph
+    - biomedical
+spec:
+  type: service
+  lifecycle: experimental
+  owner: polfenollar
+  system: biomedical-agents
+  dependsOn:
+    - component:qdrant
+    - component:otel-collector
