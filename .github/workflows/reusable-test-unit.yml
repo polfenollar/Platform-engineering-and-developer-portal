@@ -1,0 +1,97 @@
+# Reusable — Unit test workflow
+# Source of truth: platform/github-actions/test-unit.yml (kept in sync)
+
+name: Unit Tests
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project to test (veyor or biomedical)'
+        required: true
+        type: string
+
+jobs:
+  test-typescript:
+    name: Test TypeScript
+    runs-on: ubuntu-latest
+    if: inputs.project == 'veyor'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: projects/veyor-marketplace/frontend/package-lock.json
+      - run: cd projects/veyor-marketplace/frontend && npm ci
+      - run: cd projects/veyor-marketplace/frontend && npm test -- --coverage --watchAll=false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: projects/veyor-marketplace/frontend/coverage/
+
+  test-java:
+    name: Test Java
+    runs-on: ubuntu-latest
+    if: inputs.project == 'veyor'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+      - run: cd projects/veyor-marketplace/backend && ./gradlew test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: projects/veyor-marketplace/backend/build/reports/tests/
+
+  test-python:
+    name: Test Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test Veyor Agents
+        if: inputs.project == 'veyor'
+        run: |
+          cd projects/veyor-marketplace/agents
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+          python -m pytest tests/ -v --cov=. --cov-report=xml
+      - name: Test BioMedical
+        if: inputs.project == 'biomedical'
+        run: |
+          cd projects/biomedical-ai
+          pip install -e ".[test]"
+          python -m pytest tests/unit/ -v --cov=src --cov-report=xml --cov-fail-under=80
+
+  test-go:
+    name: Test Go
+    runs-on: ubuntu-latest
+    if: inputs.project == 'veyor'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Test Quoting Service
+        run: |
+          cd projects/veyor-marketplace/quoting-service
+          go test ./... -v -race -coverprofile=coverage.out
+          go tool cover -func=coverage.out
+      - name: Test Carrier Simulator
+        run: |
+          cd projects/veyor-marketplace/carrier-simulator
+          go test ./... -v -race -coverprofile=coverage.out

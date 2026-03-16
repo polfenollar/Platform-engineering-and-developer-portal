@@ -1,0 +1,78 @@
+# Platform CI
+# Lints Helm charts and Terraform modules on every platform/ change.
+# These jobs run directly (no submodules needed) so they always execute.
+
+name: Platform CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'platform/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'platform/**'
+      - '.github/workflows/**'
+
+jobs:
+  lint-helm:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+      - name: Lint all charts
+        run: |
+          FAILED=0
+          for chart in platform/kubernetes/charts/*/; do
+            echo "Linting $chart..."
+            if ! helm lint "$chart"; then
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+  lint-terraform:
+    name: Terraform Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.7.0'
+      - name: Check formatting
+        run: terraform fmt -check -recursive platform/terraform/
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.50.3
+      - name: Run tflint
+        run: |
+          cd platform/terraform
+          tflint --init
+          tflint --recursive
+
+  validate-k8s-manifests:
+    name: Validate K8s Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+      - name: Dry-run apply base manifests
+        run: |
+          kubectl apply --dry-run=client -f platform/kubernetes/base/
+
+  validate-workflows:
+    name: Validate GitHub Actions Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install actionlint
+        run: |
+          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          sudo mv actionlint /usr/local/bin/
+      - name: Lint workflow files
+        run: actionlint .github/workflows/*.yml

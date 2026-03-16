@@ -1,0 +1,43 @@
+# Reusable — Load test workflow
+# Source of truth: platform/github-actions/test-load.yml (kept in sync)
+
+name: Load Tests
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project to load test (veyor or biomedical)'
+        required: true
+        type: string
+      target_url:
+        description: 'Base URL of the deployed service'
+        required: true
+        type: string
+
+jobs:
+  load-test:
+    name: k6 Load Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: grafana/setup-k6-action@v1
+      - name: Run Veyor Load Tests
+        if: inputs.project == 'veyor'
+        run: |
+          k6 run \
+            --env BASE_URL=${{ inputs.target_url }} \
+            --out json=results.json \
+            platform/kubernetes/charts/veyor-backend/tests/load.js
+      - name: Run BioMedical Load Tests
+        if: inputs.project == 'biomedical'
+        run: |
+          k6 run \
+            --env BASE_URL=${{ inputs.target_url }} \
+            --out json=results.json \
+            platform/kubernetes/charts/biomedical-api/tests/load.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-results
+          path: results.json

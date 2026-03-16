@@ -1,0 +1,102 @@
+# Reusable — Integration test workflow
+# Source of truth: platform/github-actions/test-integration.yml (kept in sync)
+
+name: Integration Tests
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project to test (veyor or biomedical)'
+        required: true
+        type: string
+
+jobs:
+  test-integration-veyor:
+    name: Veyor Integration Tests
+    runs-on: ubuntu-latest
+    if: inputs.project == 'veyor'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: veyor_test
+          POSTGRES_USER: veyor
+          POSTGRES_PASSWORD: test_password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        ports: ['9092:9092']
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+      - name: Run Integration Tests
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/veyor_test
+          SPRING_DATASOURCE_USERNAME: veyor
+          SPRING_DATASOURCE_PASSWORD: test_password
+          SPRING_REDIS_HOST: localhost
+          SPRING_KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+        run: |
+          cd projects/veyor-marketplace/backend
+          ./gradlew integrationTest
+
+  test-integration-biomedical:
+    name: BioMedical Integration Tests
+    runs-on: ubuntu-latest
+    if: inputs.project == 'biomedical'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: biomedical_test
+          POSTGRES_USER: biomedical
+          POSTGRES_PASSWORD: test_password
+        ports: ['5432:5432']
+      minio:
+        image: minio/minio:latest
+        ports: ['9000:9000']
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run Integration Tests
+        env:
+          DATABASE_URL: postgresql://biomedical:test_password@localhost:5432/biomedical_test
+          MINIO_ENDPOINT: localhost:9000
+          MINIO_ACCESS_KEY: minioadmin
+          MINIO_SECRET_KEY: minioadmin
+        run: |
+          cd projects/biomedical-ai
+          pip install -e ".[test]"
+          python -m pytest tests/integration/ -v --timeout=120

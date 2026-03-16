@@ -1,0 +1,53 @@
+# Reusable — SAST scanning workflow
+# Source of truth: platform/github-actions/sast-scan.yml (kept in sync)
+
+name: SAST Scan
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project to scan (veyor or biomedical)'
+        required: true
+        type: string
+
+jobs:
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Scan Veyor
+        if: inputs.project == 'veyor'
+        run: semgrep scan --config auto --error --json --output semgrep-results.json projects/veyor-marketplace/
+      - name: Scan BioMedical
+        if: inputs.project == 'biomedical'
+        run: semgrep scan --config auto --error --json --output semgrep-results.json projects/biomedical-ai/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-results-${{ inputs.project }}
+          path: semgrep-results.json
+
+  trivy:
+    name: Trivy Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'projects/'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
