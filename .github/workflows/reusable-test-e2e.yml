@@ -56,6 +56,6 @@ jobs:
           python-version: '3.11'
       - name: Run API E2E tests
         run: |
-          cd projects/biomedical-ai
+          cd projects/literature-synthesis-agent
           pip install -e ".[test]"
           python -m pytest tests/e2e/ -v --timeout=300

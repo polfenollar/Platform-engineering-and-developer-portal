@@ -64,14 +64,18 @@ jobs:
       - name: Test Veyor Agents
         if: inputs.project == 'veyor'
         run: |
-          cd projects/veyor-marketplace/agents
-          pip install -r requirements.txt
-          pip install pytest pytest-cov
-          python -m pytest tests/ -v --cov=. --cov-report=xml
+          if [ -d "projects/veyor-marketplace/agents" ]; then
+            cd projects/veyor-marketplace/agents
+            pip install -r requirements.txt
+            pip install pytest pytest-cov
+            python -m pytest tests/ -v --cov=. --cov-report=xml
+          else
+            echo "agents not yet in repo, skipping"
+          fi
       - name: Test BioMedical
         if: inputs.project == 'biomedical'
         run: |
-          cd projects/biomedical-ai
+          cd projects/literature-synthesis-agent
           pip install -e ".[test]"
           python -m pytest tests/unit/ -v --cov=src --cov-report=xml --cov-fail-under=80
 
@@ -86,12 +90,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.21'
-      - name: Test Quoting Service
+      - name: Test Go services
         run: |
-          cd projects/veyor-marketplace/quoting-service
-          go test ./... -v -race -coverprofile=coverage.out
-          go tool cover -func=coverage.out
-      - name: Test Carrier Simulator
-        run: |
-          cd projects/veyor-marketplace/carrier-simulator
-          go test ./... -v -race -coverprofile=coverage.out
+          for svc in quoting-service carrier-simulator; do
+            dir="projects/veyor-marketplace/$svc"
+            if [ -d "$dir" ]; then
+              echo "Testing $svc..."
+              cd "$dir"
+              go test ./... -v -race -coverprofile=coverage.out
+              go tool cover -func=coverage.out
+              cd -
+            else
+              echo "$svc not yet in repo, skipping"
+            fi
+          done

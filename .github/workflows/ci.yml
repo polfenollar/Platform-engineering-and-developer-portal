@@ -41,7 +41,7 @@ jobs:
               - 'platform/kubernetes/charts/veyor-*/**'
               - 'platform/kubernetes/docker/veyor/**'
             biomedical:
-              - 'projects/biomedical-ai/**'
+              - 'projects/literature-synthesis-agent/**'
               - 'platform/kubernetes/charts/biomedical-*/**'
               - 'platform/kubernetes/docker/biomedical/**'
             platform:

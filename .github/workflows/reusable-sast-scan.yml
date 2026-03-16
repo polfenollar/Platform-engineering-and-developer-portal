@@ -26,7 +26,7 @@ jobs:
         run: semgrep scan --config auto --error --json --output semgrep-results.json projects/veyor-marketplace/
       - name: Scan BioMedical
         if: inputs.project == 'biomedical'
-        run: semgrep scan --config auto --error --json --output semgrep-results.json projects/biomedical-ai/
+        run: semgrep scan --config auto --error --json --output semgrep-results.json projects/literature-synthesis-agent/
       - uses: actions/upload-artifact@v4
         if: always()
         with:

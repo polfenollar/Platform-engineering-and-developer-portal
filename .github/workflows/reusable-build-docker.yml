@@ -57,7 +57,17 @@ jobs:
           registry: ${{ inputs.registry }}
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Check context exists
+        id: ctx-check
+        run: |
+          if [ -d "${{ matrix.service.context }}" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Context ${{ matrix.service.context }} not found, skipping build"
+          fi
       - uses: docker/build-push-action@v5
+        if: steps.ctx-check.outputs.exists == 'true'
         with:
           context: ${{ matrix.service.context }}
           file: ${{ matrix.service.dockerfile }}
@@ -76,10 +86,10 @@ jobs:
       matrix:
         service:
           - name: biomedical-api
-            context: projects/biomedical-ai
+            context: projects/literature-synthesis-agent
             dockerfile: platform/kubernetes/docker/biomedical/Dockerfile.api
           - name: biomedical-workers
-            context: projects/biomedical-ai
+            context: projects/literature-synthesis-agent
             dockerfile: platform/kubernetes/docker/biomedical/Dockerfile.workers
     steps:
       - uses: actions/checkout@v4

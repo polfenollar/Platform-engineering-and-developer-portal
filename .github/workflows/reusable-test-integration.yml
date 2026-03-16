@@ -97,6 +97,6 @@ jobs:
           MINIO_ACCESS_KEY: minioadmin
           MINIO_SECRET_KEY: minioadmin
         run: |
-          cd projects/biomedical-ai
+          cd projects/literature-synthesis-agent
           pip install -e ".[test]"
           python -m pytest tests/integration/ -v --timeout=120
