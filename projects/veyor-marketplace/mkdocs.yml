@@ -1,0 +1,19 @@
+site_name: Veyor Marketplace
+site_description: Documentation for the Veyor Marketplace platform engineering layer.
+
+nav:
+  - Welcome: index.md
+  - Architecture: architecture.md
+  - Golden Paths: golden-paths.md
+  - CI/CD: cicd.md
+  - Observability: observability.md
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: deep purple
+    accent: indigo
+
+plugins:
+  - techdocs-core

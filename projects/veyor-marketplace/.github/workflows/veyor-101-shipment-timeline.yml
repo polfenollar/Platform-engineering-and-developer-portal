@@ -1,0 +1,168 @@
+name: feat/VEYOR-101 — Shipment Timeline
+
+on:
+  push:
+    branches: ['feat/VEYOR-101-shipment-timeline']
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── 1. Lint ──────────────────────────────────────────────────────────────
+  lint-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { java-version: '21', distribution: 'temurin' }
+      - run: cd backend && ./gradlew checkstyleMain checkstyleTest
+
+  lint-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: cd frontend && npm ci && npm run lint && npm run tsc
+
+  # ── 2. Unit tests ────────────────────────────────────────────────────────
+  test-backend-unit:
+    runs-on: ubuntu-latest
+    needs: lint-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { java-version: '21', distribution: 'temurin' }
+      - run: cd backend && ./gradlew test --tests "*.shipment.*"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-results
+          path: backend/build/reports/tests/
+
+  test-frontend-unit:
+    runs-on: ubuntu-latest
+    needs: lint-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: cd frontend && npm ci && npm test -- --coverage --testPathPattern="ShipmentTimeline"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-test-results
+          path: frontend/coverage/
+
+  # ── 3. SAST security scan ────────────────────────────────────────────────
+  sast-scan:
+    runs-on: ubuntu-latest
+    needs: [lint-backend, lint-frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/java p/typescript p/owasp-top-ten
+
+  # ── 4. Integration tests (Testcontainers) ────────────────────────────────
+  test-integration:
+    runs-on: ubuntu-latest
+    needs: [test-backend-unit]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: veyor_test
+          POSTGRES_USER: veyor
+          POSTGRES_PASSWORD: veyor
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        options: --health-cmd "redis-cli ping" --health-interval 10s
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { java-version: '21', distribution: 'temurin' }
+      - run: |
+          cd backend && ./gradlew integrationTest \
+            -Dspring.datasource.url=jdbc:postgresql://localhost:5432/veyor_test \
+            -Dspring.datasource.username=veyor \
+            -Dspring.datasource.password=veyor \
+            -Dspring.redis.host=localhost
+
+  # ── 5. E2E (Playwright) ──────────────────────────────────────────────────
+  test-e2e:
+    runs-on: ubuntu-latest
+    needs: [test-integration, test-frontend-unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: cd frontend && npm ci && npx playwright install --with-deps
+      - run: cd frontend && npx playwright test --grep "shipment timeline"
+
+  # ── 6. Docker build ──────────────────────────────────────────────────────
+  build-docker:
+    runs-on: ubuntu-latest
+    needs: [test-e2e, sast-scan]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: false
+          tags: veyor-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: false
+          tags: veyor-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── 7. Deploy staging ────────────────────────────────────────────────────
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: build-docker
+    environment: staging
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          helm upgrade --install veyor-backend ./platform/kubernetes/charts/veyor-backend \
+            --namespace veyor-staging \
+            --set image.tag=${{ github.sha }} \
+            --values ./platform/kubernetes/charts/veyor-backend/values-staging.yaml \
+            --wait --timeout 5m
+          helm upgrade --install veyor-frontend ./platform/kubernetes/charts/veyor-frontend \
+            --namespace veyor-staging \
+            --set image.tag=${{ github.sha }} \
+            --values ./platform/kubernetes/charts/veyor-frontend/values-staging.yaml \
+            --wait --timeout 5m
+
+  # ── 8. Deploy production (manual approval gate) ──────────────────────────
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: production          # requires reviewer approval in GitHub
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          helm upgrade --install veyor-backend ./platform/kubernetes/charts/veyor-backend \
+            --namespace veyor-prod \
+            --set image.tag=${{ github.sha }} \
+            --values ./platform/kubernetes/charts/veyor-backend/values-prod.yaml \
+            --wait --timeout 10m
+          helm upgrade --install veyor-frontend ./platform/kubernetes/charts/veyor-frontend \
+            --namespace veyor-prod \
+            --set image.tag=${{ github.sha }} \
+            --values ./platform/kubernetes/charts/veyor-frontend/values-prod.yaml \
+            --wait --timeout 10m
+          echo "Shipment timeline feature live at api.veyor.io/api/shipments/{id}/timeline"
