@@ -17,12 +17,19 @@ from src.tools.audit import log_agent_decision
 
 logger = structlog.get_logger(__name__)
 
-# ── LLM — deterministic (temperature=0 per ARCHITECTURE_BIOMEDICAL.md) ──────
-_llm = ChatOpenAI(
-    model="claude-sonnet-4-6",
-    temperature=0,
-    api_key=os.environ["ANTHROPIC_API_KEY"],
-)
+# ── LLM — lazy init so tests can mock before ANTHROPIC_API_KEY is required ───
+_llm: ChatOpenAI | None = None
+
+
+def _get_llm() -> ChatOpenAI:
+    global _llm
+    if _llm is None:
+        _llm = ChatOpenAI(
+            model="claude-sonnet-4-6",
+            temperature=0,
+            api_key=os.environ["ANTHROPIC_API_KEY"],
+        )
+    return _llm
 
 
 class SynthesisState(TypedDict):
@@ -82,7 +89,7 @@ def synthesise_node(state: SynthesisState) -> SynthesisState:
         f"Provide a structured synthesis with inline citations using the document IDs."
     )
 
-    response = _llm.invoke(prompt)
+    response = _get_llm().invoke(prompt)
     synthesis = response.content  # type: ignore[union-attr]
 
     log_agent_decision(

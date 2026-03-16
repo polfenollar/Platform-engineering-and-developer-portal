@@ -95,7 +95,7 @@ def test_synthesise_node_extracts_source_ids(monkeypatch: pytest.MonkeyPatch) ->
                 content = "Synthesis text with [PMID:42] citation."
             return _Resp()
 
-    monkeypatch.setattr("src.agents.synthesis_agent._llm", _FakeLLM())
+    monkeypatch.setattr("src.agents.synthesis_agent._get_llm", lambda: _FakeLLM())
     monkeypatch.setattr("src.agents.synthesis_agent.log_agent_decision", lambda **kw: None)
 
     docs = [{"id": "PMID:42", "title": "T", "abstract": "A"}]

@@ -23,7 +23,8 @@ export async function fetchShipmentTimeline(
 ): Promise<ShipmentTimelineResponse> {
   const res = await fetch(`${API_BASE}/api/shipments/${encodeURIComponent(shipmentId)}/timeline`, {
     headers: { Authorization: `Bearer ${token}` },
-    next: { revalidate: 30 }, // ISR — fresh enough for tracking
+    // Next.js ISR — fresh enough for tracking
+    ...(typeof window === 'undefined' && { next: { revalidate: 30 } } as object),
   });
 
   if (res.status === 404) {
