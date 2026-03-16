@@ -1,0 +1,90 @@
+# ==============================================================================
+# Backstage — app-config.yaml
+# ==============================================================================
+app:
+  title: Developer Portal — Platform Engineering
+  baseUrl: http://localhost:3000
+
+organization:
+  name: Pol Fenollar
+
+backend:
+  baseUrl: http://localhost:7007
+  listen:
+    port: 7007
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+  cors:
+    origin: http://localhost:3000
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  database:
+    client: better-sqlite3
+    connection: ':memory:'
+  auth:
+    keys:
+      - secret: "development-secret-key-change-this-in-production"
+
+
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+  rules:
+    - allow: [Component, System, API, Resource, Template, Location]
+  locations:
+    # --- Veyor Marketplace Catalog ---
+    - type: file
+      target: /Users/polfenollarvilla/Documents/DEVELOPER PORTAL/backstage/catalog/veyor-catalog.yml
+      rules:
+        - allow: [Component, System, API, Resource]
+
+    # --- BioMedical AI Catalog ---
+    - type: file
+      target: /Users/polfenollarvilla/Documents/DEVELOPER PORTAL/backstage/catalog/biomedical-catalog.yml
+      rules:
+        - allow: [Component, System, API, Resource]
+
+    # --- Golden Path Templates ---
+    - type: file
+      target: /Users/polfenollarvilla/Documents/DEVELOPER PORTAL/golden-paths/templates/golden-path-templates.yml
+      rules:
+        - allow: [Template]
+
+
+scaffolder:
+  defaultAuthor:
+    name: Developer Portal Bot
+    email: devportal@veyor.io
+
+techdocs:
+  builder: local
+  generator:
+    runIn: local
+  publisher:
+    type: local
+
+auth:
+  # See https://backstage.io/docs/auth/ to learn about supported providers
+  environment: development
+  providers:
+    guest:
+      dangerouslyAllowOrigin: ["http://localhost:3000"]
+
+signIn:
+  providers:
+    guest: {}
+
+
+
+proxy:
+  endpoints:
+    '/grafana':
+      target: http://grafana.observability:3000
+      headers:
+        Authorization: Bearer ${GRAFANA_TOKEN}
