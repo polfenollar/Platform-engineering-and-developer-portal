@@ -1,0 +1,372 @@
+# ==============================================================================
+# Backstage — Golden Path Template: New Microservice
+# ==============================================================================
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: new-microservice
+  title: 🚀 New Microservice
+  description: Create a new microservice with Dockerfile, Helm chart, CI/CD, tests, and observability — following platform golden paths
+  tags:
+    - golden-path
+    - microservice
+    - recommended
+spec:
+  owner: polfenollar
+  type: service
+
+  parameters:
+    - title: Service Configuration
+      required:
+        - name
+        - language
+        - project
+      properties:
+        name:
+          title: Service Name
+          type: string
+          description: Name of the new microservice (kebab-case)
+          pattern: '^[a-z][a-z0-9-]*$'
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          description: Brief description of what this service does
+        language:
+          title: Language
+          type: string
+          description: Primary programming language
+          enum:
+            - python
+            - go
+            - java
+            - typescript
+          enumNames:
+            - Python (FastAPI)
+            - Go (gRPC/REST)
+            - Java (Spring Boot)
+            - TypeScript (NestJS)
+        project:
+          title: Project
+          type: string
+          description: Which project does this service belong to?
+          enum:
+            - veyor
+            - biomedical
+          enumNames:
+            - Veyor Marketplace
+            - BioMedical AI
+
+    - title: Infrastructure
+      properties:
+        needsDatabase:
+          title: Needs PostgreSQL Database
+          type: boolean
+          default: false
+        needsCache:
+          title: Needs Redis Cache
+          type: boolean
+          default: false
+        needsMessageQueue:
+          title: Needs Kafka / Message Queue
+          type: boolean
+          default: false
+        port:
+          title: Service Port
+          type: integer
+          default: 8080
+
+  steps:
+    - id: fetch-skeleton
+      name: Fetch Skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          language: ${{ parameters.language }}
+          project: ${{ parameters.project }}
+          port: ${{ parameters.port }}
+          needsDatabase: ${{ parameters.needsDatabase }}
+          needsCache: ${{ parameters.needsCache }}
+
+    - id: publish-github
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        repoUrl: github.com?owner=polfenollar&repo=${{ parameters.name }}
+        description: ${{ parameters.description }}
+        defaultBranch: main
+        protectDefaultBranch: true
+        requireCodeOwnerReviews: true
+
+    - id: register-catalog
+      name: Register in Backstage
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-github'].output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish-github'].output.remoteUrl }}
+      - title: Open in Backstage
+        icon: catalog
+        entityRef: ${{ steps['register-catalog'].output.entityRef }}
+---
+# ==============================================================================
+# Backstage — Golden Path Template: New AI Agent
+# ==============================================================================
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: new-ai-agent
+  title: 🤖 New AI Agent
+  description: Create a new LangChain/LangGraph AI agent with Langsmith tracing, Temporal workflow, and observability
+  tags:
+    - golden-path
+    - ai-agent
+    - langchain
+spec:
+  owner: polfenollar
+  type: service
+
+  parameters:
+    - title: Agent Configuration
+      required:
+        - name
+        - agentFramework
+        - project
+      properties:
+        name:
+          title: Agent Name
+          type: string
+          pattern: '^[a-z][a-z0-9-]*$'
+        description:
+          title: Description
+          type: string
+        agentFramework:
+          title: Agent Framework
+          type: string
+          enum:
+            - langchain-react
+            - langgraph
+            - crewai
+          enumNames:
+            - LangChain ReAct Agent
+            - LangGraph State Machine
+            - CrewAI Multi-Agent
+        project:
+          title: Project
+          type: string
+          enum:
+            - veyor
+            - biomedical
+
+    - title: Agent Capabilities
+      properties:
+        enableLangsmith:
+          title: Enable Langsmith Tracing
+          type: boolean
+          default: true
+        enableTemporal:
+          title: Enable Temporal Workflow
+          type: boolean
+          default: false
+        tools:
+          title: Agent Tools
+          type: array
+          items:
+            type: string
+            enum:
+              - database-query
+              - api-call
+              - vector-search
+              - web-search
+              - file-reader
+
+  steps:
+    - id: fetch-skeleton
+      name: Fetch Agent Skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          framework: ${{ parameters.agentFramework }}
+          project: ${{ parameters.project }}
+          enableLangsmith: ${{ parameters.enableLangsmith }}
+          enableTemporal: ${{ parameters.enableTemporal }}
+
+    - id: publish-github
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        repoUrl: github.com?owner=polfenollar&repo=${{ parameters.name }}
+        description: ${{ parameters.description }}
+        defaultBranch: main
+
+    - id: register-catalog
+      name: Register in Backstage
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-github'].output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish-github'].output.remoteUrl }}
+      - title: Open in Backstage
+        icon: catalog
+        entityRef: ${{ steps['register-catalog'].output.entityRef }}
+---
+# ==============================================================================
+# Backstage — Golden Path Template: New Frontend
+# ==============================================================================
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: new-frontend
+  title: 🎨 New Frontend App
+  description: Create a new Next.js frontend with ESLint, Playwright E2E tests, and deployment config
+  tags:
+    - golden-path
+    - frontend
+    - nextjs
+spec:
+  owner: polfenollar
+  type: website
+
+  parameters:
+    - title: Frontend Configuration
+      required:
+        - name
+      properties:
+        name:
+          title: Application Name
+          type: string
+          pattern: '^[a-z][a-z0-9-]*$'
+        description:
+          title: Description
+          type: string
+        styling:
+          title: Styling Framework
+          type: string
+          enum:
+            - css-modules
+            - tailwind
+            - styled-components
+          default: css-modules
+
+  steps:
+    - id: fetch-skeleton
+      name: Fetch Frontend Skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          styling: ${{ parameters.styling }}
+
+    - id: publish-github
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        repoUrl: github.com?owner=polfenollar&repo=${{ parameters.name }}
+        description: ${{ parameters.description }}
+
+    - id: register-catalog
+      name: Register in Backstage
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-github'].output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish-github'].output.remoteUrl }}
+---
+# ==============================================================================
+# Backstage — Golden Path Template: New Data Pipeline
+# ==============================================================================
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: new-data-pipeline
+  title: 📊 New Data Pipeline
+  description: Create a data ingestion pipeline with Iceberg, MinIO, quality checks, and Temporal orchestration
+  tags:
+    - golden-path
+    - data-pipeline
+    - lakehouse
+spec:
+  owner: polfenollar
+  type: service
+
+  parameters:
+    - title: Pipeline Configuration
+      required:
+        - name
+        - dataSource
+      properties:
+        name:
+          title: Pipeline Name
+          type: string
+          pattern: '^[a-z][a-z0-9-]*$'
+        description:
+          title: Description
+          type: string
+        dataSource:
+          title: Data Source
+          type: string
+          enum:
+            - pubmed
+            - clinicaltrials
+            - custom-api
+            - file-upload
+          enumNames:
+            - PubMed Open Access
+            - ClinicalTrials.gov
+            - Custom REST API
+            - File Upload (CSV/JSON)
+        qualityChecks:
+          title: Enable Data Quality Checks
+          type: boolean
+          default: true
+
+  steps:
+    - id: fetch-skeleton
+      name: Fetch Pipeline Skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          dataSource: ${{ parameters.dataSource }}
+          qualityChecks: ${{ parameters.qualityChecks }}
+
+    - id: publish-github
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        repoUrl: github.com?owner=polfenollar&repo=${{ parameters.name }}
+
+    - id: register-catalog
+      name: Register in Backstage
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-github'].output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish-github'].output.remoteUrl }}

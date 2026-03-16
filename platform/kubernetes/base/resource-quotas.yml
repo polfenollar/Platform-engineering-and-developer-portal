@@ -1,0 +1,56 @@
+# Kubernetes Base — Resource Quotas
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-quota
+  namespace: veyor-dev
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    pods: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-quota
+  namespace: biomedical-dev
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    pods: "20"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: veyor-dev
+spec:
+  limits:
+    - default:
+        cpu: "500m"
+        memory: 512Mi
+      defaultRequest:
+        cpu: "100m"
+        memory: 128Mi
+      type: Container
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: biomedical-dev
+spec:
+  limits:
+    - default:
+        cpu: "500m"
+        memory: 512Mi
+      defaultRequest:
+        cpu: "100m"
+        memory: 128Mi
+      type: Container

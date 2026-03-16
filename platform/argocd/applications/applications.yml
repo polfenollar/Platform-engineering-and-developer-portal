@@ -1,0 +1,169 @@
+# ==============================================================================
+# Argo CD Applications — Veyor Marketplace (dev / staging / prod)
+# ==============================================================================
+
+# --- Veyor Dev (auto-sync) ---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: veyor-dev
+  namespace: argocd
+  labels:
+    project: veyor
+    environment: dev
+spec:
+  project: veyor
+  source:
+    repoURL: https://github.com/polfenollar/developer-portal.git
+    targetRevision: main
+    path: platform/kubernetes/charts/veyor-backend
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: veyor-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        maxDuration: 3m
+        factor: 2
+---
+# --- Veyor Staging (manual sync) ---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: veyor-staging
+  namespace: argocd
+  labels:
+    project: veyor
+    environment: staging
+spec:
+  project: veyor
+  source:
+    repoURL: https://github.com/polfenollar/developer-portal.git
+    targetRevision: main
+    path: platform/kubernetes/charts/veyor-backend
+    helm:
+      valueFiles:
+        - values-staging.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: veyor-staging
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+---
+# --- Veyor Production (manual sync, no prune) ---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: veyor-prod
+  namespace: argocd
+  labels:
+    project: veyor
+    environment: prod
+spec:
+  project: veyor
+  source:
+    repoURL: https://github.com/polfenollar/developer-portal.git
+    targetRevision: main
+    path: platform/kubernetes/charts/veyor-backend
+    helm:
+      valueFiles:
+        - values-prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: veyor-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+---
+# ==============================================================================
+# Argo CD Applications — BioMedical AI (dev / staging / prod)
+# ==============================================================================
+
+# --- BioMedical Dev (auto-sync) ---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: biomedical-dev
+  namespace: argocd
+  labels:
+    project: biomedical
+    environment: dev
+spec:
+  project: biomedical
+  source:
+    repoURL: https://github.com/polfenollar/developer-portal.git
+    targetRevision: main
+    path: platform/kubernetes/charts/biomedical-api
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: biomedical-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        maxDuration: 3m
+        factor: 2
+---
+# --- BioMedical Staging (manual sync) ---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: biomedical-staging
+  namespace: argocd
+  labels:
+    project: biomedical
+    environment: staging
+spec:
+  project: biomedical
+  source:
+    repoURL: https://github.com/polfenollar/developer-portal.git
+    targetRevision: main
+    path: platform/kubernetes/charts/biomedical-api
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: biomedical-staging
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+---
+# --- BioMedical Production (manual sync) ---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: biomedical-prod
+  namespace: argocd
+  labels:
+    project: biomedical
+    environment: prod
+spec:
+  project: biomedical
+  source:
+    repoURL: https://github.com/polfenollar/developer-portal.git
+    targetRevision: main
+    path: platform/kubernetes/charts/biomedical-api
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: biomedical-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

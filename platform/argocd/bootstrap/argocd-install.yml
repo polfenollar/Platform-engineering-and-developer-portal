@@ -1,0 +1,69 @@
+# Argo CD Bootstrap — Installation Manifest
+# Minimal install suitable for kind / k3s clusters
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+---
+# This file bootstraps Argo CD.
+# In production, pin to a specific version:
+# kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.0/manifests/install.yaml
+#
+# For local dev, use the HA-less install:
+# kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+#
+# After install, configure the repo credentials:
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Repository configuration
+  repositories: |
+    - url: https://github.com/polfenollar/developer-portal.git
+      type: git
+    - url: https://github.com/polfenollar/Veyor-marketplace.git
+      type: git
+    - url: https://github.com/polfenollar/evidence-based-biomedical-multiagent-ai.git
+      type: git
+
+  # Enable Helm support
+  helm.enabled: "true"
+
+  # Enable Kustomize support
+  kustomize.enabled: "true"
+
+  # Server-side diff for better Helm support
+  server.diff.server-side: "true"
+
+  # Application controller self-heal interval
+  timeout.reconciliation: "180s"
+---
+# Argo CD RBAC Policy
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-rbac-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  policy.default: role:readonly
+  policy.csv: |
+    # Admin can do everything
+    p, role:admin, applications, *, */*, allow
+    p, role:admin, clusters, *, *, allow
+    p, role:admin, repositories, *, *, allow
+    p, role:admin, projects, *, *, allow
+
+    # Developers can sync dev environments
+    p, role:developer, applications, get, */*, allow
+    p, role:developer, applications, sync, */*-dev, allow
+
+    # Assign roles
+    g, polfenollar, role:admin

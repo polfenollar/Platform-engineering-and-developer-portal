@@ -1,0 +1,196 @@
+# ==============================================================================
+# Backstage — Software Catalog: Veyor Marketplace System
+# ==============================================================================
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: veyor-marketplace
+  description: Freight SaaS Marketplace connecting shippers with carriers
+  annotations:
+    github.com/project-slug: polfenollar/Veyor-marketplace
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - marketplace
+    - freight
+    - saas
+  links:
+    - url: https://github.com/polfenollar/Veyor-marketplace
+      title: GitHub Repository
+    - url: http://localhost:3000
+      title: Frontend (local)
+    - url: http://localhost:8080
+      title: API (local)
+spec:
+  owner: polfenollar
+  domain: logistics
+---
+# --- Veyor Frontend ---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: veyor-frontend
+  description: Next.js 14 App Router frontend for the marketplace
+  annotations:
+    github.com/project-slug: polfenollar/Veyor-marketplace
+    backstage.io/techdocs-ref: dir:./docs
+  tags:
+    - nextjs
+    - typescript
+    - frontend
+spec:
+  type: website
+  lifecycle: production
+  owner: polfenollar
+  system: veyor-marketplace
+  dependsOn:
+    - component:veyor-backend
+  providesApis: []
+---
+# --- Veyor Backend ---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: veyor-backend
+  description: Spring Boot monolith — Identity, Booking, Shipment, Admin, Notifications
+  annotations:
+    github.com/project-slug: polfenollar/Veyor-marketplace
+    backstage.io/techdocs-ref: dir:./docs
+  tags:
+    - java
+    - spring-boot
+    - api
+spec:
+  type: service
+  lifecycle: production
+  owner: polfenollar
+  system: veyor-marketplace
+  providesApis:
+    - veyor-rest-api
+  consumesApis:
+    - veyor-quoting-api
+  dependsOn:
+    - resource:veyor-postgres
+    - resource:veyor-redis
+    - resource:veyor-kafka
+---
+# --- Veyor Quoting Service ---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: veyor-quoting
+  description: Go gRPC microservice for real-time freight quote computation
+  annotations:
+    github.com/project-slug: polfenollar/Veyor-marketplace
+  tags:
+    - go
+    - grpc
+    - microservice
+spec:
+  type: service
+  lifecycle: production
+  owner: polfenollar
+  system: veyor-marketplace
+  providesApis:
+    - veyor-quoting-api
+---
+# --- Veyor AI Agent ---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: veyor-agents
+  description: FastAPI + LangChain ReAct agent for AI-powered customer support
+  annotations:
+    github.com/project-slug: polfenollar/Veyor-marketplace
+  tags:
+    - python
+    - langchain
+    - ai-agent
+spec:
+  type: service
+  lifecycle: production
+  owner: polfenollar
+  system: veyor-marketplace
+  consumesApis:
+    - veyor-rest-api
+---
+# --- Veyor REST API ---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: veyor-rest-api
+  description: Veyor Marketplace REST API
+  tags:
+    - rest
+    - openapi
+spec:
+  type: openapi
+  lifecycle: production
+  owner: polfenollar
+  system: veyor-marketplace
+  definition: |
+    openapi: "3.0.0"
+    info:
+      title: Veyor Marketplace API
+      version: "1.0.0"
+    paths:
+      /api/auth/register:
+        post:
+          summary: Register a new user
+      /api/auth/login:
+        post:
+          summary: Authenticate user
+      /api/quotes/search:
+        post:
+          summary: Search for freight quotes
+      /api/bookings:
+        post:
+          summary: Create a booking
+      /api/shipments/{id}:
+        get:
+          summary: Get shipment status
+---
+# --- Veyor gRPC API ---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: veyor-quoting-api
+  description: gRPC API for freight quote computation
+  tags:
+    - grpc
+spec:
+  type: grpc
+  lifecycle: production
+  owner: polfenollar
+  system: veyor-marketplace
+  definition: "proto file at quoting-service/proto/"
+---
+# --- Resources ---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: veyor-postgres
+  description: PostgreSQL database for Veyor
+spec:
+  type: database
+  owner: polfenollar
+  system: veyor-marketplace
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: veyor-redis
+  description: Redis cache for Veyor
+spec:
+  type: database
+  owner: polfenollar
+  system: veyor-marketplace
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: veyor-kafka
+  description: Kafka message broker for Veyor
+spec:
+  type: database
+  owner: polfenollar
+  system: veyor-marketplace

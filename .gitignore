@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnp.*
+.yarn/cache
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+__pycache__/
+.gradle/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets
+.env
+.env.local
+*.pem
+*.key
+*.tfvars
+!*.tfvars.example
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Docker
+*.pid
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backstage
+backstage/node_modules/
+backstage/dist-types/
+
+# Helm
+*.tgz
+
+# Coverage
+coverage/
+htmlcov/
+.coverage

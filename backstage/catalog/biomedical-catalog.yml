@@ -1,0 +1,140 @@
+# ==============================================================================
+# Backstage — Software Catalog: BioMedical AI System
+# ==============================================================================
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: biomedical-ai
+  description: Production-grade biomedical evidence synthesis platform with governed lakehouse and multi-agent workflows
+  annotations:
+    github.com/project-slug: polfenollar/evidence-based-biomedical-multiagent-ai
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - mlops
+    - biomedical
+    - multi-agent
+  links:
+    - url: https://github.com/polfenollar/evidence-based-biomedical-multiagent-ai
+      title: GitHub Repository
+spec:
+  owner: polfenollar
+  domain: healthcare
+---
+# --- BioMedical API ---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: biomedical-api
+  description: FastAPI service for biomedical evidence queries and synthesis
+  annotations:
+    github.com/project-slug: polfenollar/evidence-based-biomedical-multiagent-ai
+  tags:
+    - python
+    - fastapi
+    - api
+spec:
+  type: service
+  lifecycle: experimental
+  owner: polfenollar
+  system: biomedical-ai
+  providesApis:
+    - biomedical-rest-api
+  dependsOn:
+    - component:biomedical-workers
+    - resource:biomedical-postgres
+    - resource:biomedical-minio
+    - resource:biomedical-vectordb
+---
+# --- BioMedical Workers ---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: biomedical-workers
+  description: Temporal workers for data ingestion, embedding, and agent orchestration
+  annotations:
+    github.com/project-slug: polfenollar/evidence-based-biomedical-multiagent-ai
+  tags:
+    - python
+    - temporal
+    - langraph
+    - workers
+spec:
+  type: service
+  lifecycle: experimental
+  owner: polfenollar
+  system: biomedical-ai
+  dependsOn:
+    - resource:biomedical-postgres
+    - resource:biomedical-minio
+    - resource:biomedical-vectordb
+    - resource:biomedical-temporal
+---
+# --- BioMedical REST API ---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: biomedical-rest-api
+  description: Evidence synthesis and search API
+  tags:
+    - rest
+spec:
+  type: openapi
+  lifecycle: experimental
+  owner: polfenollar
+  system: biomedical-ai
+  definition: |
+    openapi: "3.0.0"
+    info:
+      title: BioMedical Evidence API
+      version: "0.1.0"
+    paths:
+      /health:
+        get:
+          summary: Health check
+      /api/v1/search:
+        post:
+          summary: Search biomedical evidence
+      /api/v1/synthesize:
+        post:
+          summary: Synthesize evidence from multiple sources
+---
+# --- Resources ---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: biomedical-postgres
+  description: PostgreSQL for metadata and audit trail
+spec:
+  type: database
+  owner: polfenollar
+  system: biomedical-ai
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: biomedical-minio
+  description: MinIO object storage (governed lakehouse)
+spec:
+  type: database
+  owner: polfenollar
+  system: biomedical-ai
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: biomedical-vectordb
+  description: Qdrant/Milvus vector database for semantic search
+spec:
+  type: database
+  owner: polfenollar
+  system: biomedical-ai
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: biomedical-temporal
+  description: Temporal server for workflow orchestration
+spec:
+  type: database
+  owner: polfenollar
+  system: biomedical-ai

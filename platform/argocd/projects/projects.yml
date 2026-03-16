@@ -1,0 +1,58 @@
+# Argo CD — AppProject for Veyor Marketplace
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: veyor
+  namespace: argocd
+spec:
+  description: Veyor Freight Marketplace
+  sourceRepos:
+    - https://github.com/polfenollar/developer-portal.git
+    - https://github.com/polfenollar/Veyor-marketplace.git
+  destinations:
+    - namespace: veyor-dev
+      server: https://kubernetes.default.svc
+    - namespace: veyor-staging
+      server: https://kubernetes.default.svc
+    - namespace: veyor-prod
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  namespaceResourceBlacklist:
+    - group: ''
+      kind: ResourceQuota
+  roles:
+    - name: developer
+      description: Can sync dev applications
+      policies:
+        - p, proj:veyor:developer, applications, sync, veyor/*, allow
+        - p, proj:veyor:developer, applications, get, veyor/*, allow
+---
+# Argo CD — AppProject for BioMedical AI
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: biomedical
+  namespace: argocd
+spec:
+  description: BioMedical Evidence Synthesis Platform
+  sourceRepos:
+    - https://github.com/polfenollar/developer-portal.git
+    - https://github.com/polfenollar/evidence-based-biomedical-multiagent-ai.git
+  destinations:
+    - namespace: biomedical-dev
+      server: https://kubernetes.default.svc
+    - namespace: biomedical-staging
+      server: https://kubernetes.default.svc
+    - namespace: biomedical-prod
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  roles:
+    - name: developer
+      description: Can sync dev applications
+      policies:
+        - p, proj:biomedical:developer, applications, sync, biomedical/*, allow
+        - p, proj:biomedical:developer, applications, get, biomedical/*, allow

@@ -1,0 +1,42 @@
+# Production overrides for veyor-backend
+replicaCount: 3
+
+image:
+  pullPolicy: Always
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+env:
+  SPRING_PROFILES_ACTIVE: "prod"
+  JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+HeapDumpOnOutOfMemoryError"
+
+ingress:
+  enabled: true
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+    - host: api.veyor.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: veyor-api-prod-tls
+      hosts:
+        - api.veyor.io
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2

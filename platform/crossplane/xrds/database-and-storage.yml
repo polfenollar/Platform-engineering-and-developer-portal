@@ -1,0 +1,84 @@
+# ==============================================================================
+# Crossplane — Composite Resource Definition (XRD) for PostgreSQL Database
+# ==============================================================================
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xpostgresdatabases.platform.veyor.io
+spec:
+  group: platform.veyor.io
+  names:
+    kind: XPostgresDatabase
+    plural: xpostgresdatabases
+  claimNames:
+    kind: PostgresDatabase
+    plural: postgresdatabases
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                parameters:
+                  type: object
+                  properties:
+                    storageGB:
+                      type: integer
+                      default: 20
+                      description: "Storage size in GB"
+                    version:
+                      type: string
+                      default: "16"
+                      description: "PostgreSQL version"
+                    size:
+                      type: string
+                      default: "small"
+                      enum: ["small", "medium", "large"]
+                      description: "Instance size: small=db.t3.micro, medium=db.t3.small, large=db.t3.medium"
+                  required:
+                    - size
+---
+# ==============================================================================
+# Crossplane — Composite Resource Definition (XRD) for S3 Bucket
+# ==============================================================================
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xobjectstores.platform.veyor.io
+spec:
+  group: platform.veyor.io
+  names:
+    kind: XObjectStore
+    plural: xobjectstores
+  claimNames:
+    kind: ObjectStore
+    plural: objectstores
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                parameters:
+                  type: object
+                  properties:
+                    region:
+                      type: string
+                      default: "us-east-1"
+                    versioning:
+                      type: boolean
+                      default: true
+                    encryption:
+                      type: boolean
+                      default: true
+                  required: []

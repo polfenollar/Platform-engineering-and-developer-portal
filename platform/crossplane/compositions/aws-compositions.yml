@@ -1,0 +1,93 @@
+# ==============================================================================
+# Crossplane — Composition: PostgreSQL on AWS RDS
+# ==============================================================================
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: postgres-aws
+  labels:
+    provider: aws
+    crossplane.io/xrd: xpostgresdatabases.platform.veyor.io
+spec:
+  compositeTypeRef:
+    apiVersion: platform.veyor.io/v1alpha1
+    kind: XPostgresDatabase
+
+  resources:
+    - name: rds-instance
+      base:
+        apiVersion: rds.aws.crossplane.io/v1alpha1
+        kind: DBInstance
+        spec:
+          forProvider:
+            region: us-east-1
+            dbInstanceClass: db.t3.micro
+            engine: postgres
+            masterUsername: admin
+            allocatedStorage: 20
+            skipFinalSnapshotBeforeDeletion: true
+            publiclyAccessible: false
+            tags:
+              - key: ManagedBy
+                value: crossplane
+          writeConnectionSecretToRef:
+            namespace: crossplane-system
+      patches:
+        - fromFieldPath: "spec.parameters.version"
+          toFieldPath: "spec.forProvider.engineVersion"
+        - fromFieldPath: "spec.parameters.storageGB"
+          toFieldPath: "spec.forProvider.allocatedStorage"
+        - type: FromCompositeFieldPath
+          fromFieldPath: "spec.parameters.size"
+          toFieldPath: "spec.forProvider.dbInstanceClass"
+          transforms:
+            - type: map
+              map:
+                small: db.t3.micro
+                medium: db.t3.small
+                large: db.t3.medium
+        - fromFieldPath: "metadata.labels[crossplane.io/claim-name]"
+          toFieldPath: "spec.forProvider.dbInstanceIdentifier"
+---
+# ==============================================================================
+# Crossplane — Composition: S3 Bucket on AWS
+# ==============================================================================
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: objectstore-aws
+  labels:
+    provider: aws
+    crossplane.io/xrd: xobjectstores.platform.veyor.io
+spec:
+  compositeTypeRef:
+    apiVersion: platform.veyor.io/v1alpha1
+    kind: XObjectStore
+
+  resources:
+    - name: s3-bucket
+      base:
+        apiVersion: s3.aws.crossplane.io/v1beta1
+        kind: Bucket
+        spec:
+          forProvider:
+            region: us-east-1
+            acl: private
+            serverSideEncryptionConfiguration:
+              rules:
+                - applyServerSideEncryptionByDefault:
+                    sseAlgorithm: AES256
+            publicAccessBlockConfiguration:
+              blockPublicAcls: true
+              blockPublicPolicy: true
+              ignorePublicAcls: true
+              restrictPublicBuckets: true
+            tagging:
+              tagSet:
+                - key: ManagedBy
+                  value: crossplane
+      patches:
+        - fromFieldPath: "spec.parameters.region"
+          toFieldPath: "spec.forProvider.region"
+        - fromFieldPath: "metadata.labels[crossplane.io/claim-name]"
+          toFieldPath: "metadata.annotations[crossplane.io/external-name]"

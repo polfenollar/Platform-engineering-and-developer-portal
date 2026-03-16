@@ -1,0 +1,39 @@
+# ==============================================================================
+# Crossplane Claims — Example usage for both projects
+# ==============================================================================
+
+# --- Veyor Database Claim ---
+apiVersion: platform.veyor.io/v1alpha1
+kind: PostgresDatabase
+metadata:
+  name: veyor-db
+  namespace: veyor-dev
+spec:
+  parameters:
+    size: small
+    version: "16"
+    storageGB: 20
+---
+# --- BioMedical Database Claim ---
+apiVersion: platform.veyor.io/v1alpha1
+kind: PostgresDatabase
+metadata:
+  name: biomedical-db
+  namespace: biomedical-dev
+spec:
+  parameters:
+    size: small
+    version: "16"
+    storageGB: 20
+---
+# --- BioMedical Lakehouse Bucket Claim ---
+apiVersion: platform.veyor.io/v1alpha1
+kind: ObjectStore
+metadata:
+  name: biomedical-lakehouse
+  namespace: biomedical-dev
+spec:
+  parameters:
+    region: us-east-1
+    versioning: true
+    encryption: true

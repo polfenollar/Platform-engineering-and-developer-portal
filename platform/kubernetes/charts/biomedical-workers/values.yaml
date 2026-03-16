@@ -1,0 +1,22 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/polfenollar/biomedical-workers
+  pullPolicy: IfNotPresent
+  tag: "latest"
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 2Gi
+env:
+  TEMPORAL_HOST: "temporal-server:7233"
+  TEMPORAL_NAMESPACE: "default"
+  LOG_LEVEL: "INFO"
+envFrom:
+  - secretRef:
+      name: biomedical-secrets
+# Workers don't need a service — they connect to Temporal
+service:
+  enabled: false

@@ -1,0 +1,57 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.tabSize": 2,
+  "editor.rulers": [100],
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  "[java]": {
+    "editor.tabSize": 4,
+    "editor.defaultFormatter": "redhat.java"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.tabSize": 4
+  },
+  "[go]": {
+    "editor.defaultFormatter": "golang.go",
+    "editor.tabSize": 4
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+
+  "python.analysis.typeCheckingMode": "basic",
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests/"],
+  "python.linting.ruffEnabled": true,
+
+  "go.lintTool": "golangci-lint",
+  "go.lintOnSave": "workspace",
+  "go.testFlags": ["-v", "-race"],
+
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.format.settings.url": "https://raw.githubusercontent.com/google/styleguide/gh-pages/eclipse-java-google-style.xml",
+
+  "eslint.workingDirectories": [
+    { "directory": "projects/veyor-marketplace/frontend", "changeProcessCWD": true }
+  ],
+
+  "files.associations": {
+    "*.yml": "yaml",
+    "*.yaml": "yaml",
+    "Dockerfile.*": "dockerfile"
+  },
+
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.gradle": true,
+    "**/build": true,
+    "**/.terraform": true,
+    "**/dist": true
+  }
+}

@@ -1,0 +1,226 @@
+# Root CI/CD Pipeline — Orchestrator
+# Calls shared reusable workflows with deployment protection rules
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ==========================================================================
+  # DETECT CHANGES — only run jobs for affected projects
+  # ==========================================================================
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      veyor: ${{ steps.filter.outputs.veyor }}
+      biomedical: ${{ steps.filter.outputs.biomedical }}
+      platform: ${{ steps.filter.outputs.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            veyor:
+              - 'projects/veyor-marketplace/**'
+            biomedical:
+              - 'projects/biomedical-ai/**'
+            platform:
+              - 'platform/**'
+              - '.github/**'
+
+  # ==========================================================================
+  # LINT
+  # ==========================================================================
+  lint-veyor:
+    needs: changes
+    if: needs.changes.outputs.veyor == 'true'
+    uses: ./.github/workflows/../platform/github-actions/lint.yml
+    with:
+      project: veyor
+
+  lint-biomedical:
+    needs: changes
+    if: needs.changes.outputs.biomedical == 'true'
+    uses: ./.github/workflows/../platform/github-actions/lint.yml
+    with:
+      project: biomedical
+
+  # ==========================================================================
+  # UNIT TESTS
+  # ==========================================================================
+  test-veyor:
+    needs: [changes, lint-veyor]
+    if: needs.changes.outputs.veyor == 'true'
+    uses: ./.github/workflows/../platform/github-actions/test-unit.yml
+    with:
+      project: veyor
+
+  test-biomedical:
+    needs: [changes, lint-biomedical]
+    if: needs.changes.outputs.biomedical == 'true'
+    uses: ./.github/workflows/../platform/github-actions/test-unit.yml
+    with:
+      project: biomedical
+
+  # ==========================================================================
+  # INTEGRATION TESTS
+  # ==========================================================================
+  integration-veyor:
+    needs: [changes, test-veyor]
+    if: needs.changes.outputs.veyor == 'true'
+    uses: ./.github/workflows/../platform/github-actions/test-integration.yml
+    with:
+      project: veyor
+
+  integration-biomedical:
+    needs: [changes, test-biomedical]
+    if: needs.changes.outputs.biomedical == 'true'
+    uses: ./.github/workflows/../platform/github-actions/test-integration.yml
+    with:
+      project: biomedical
+
+  # ==========================================================================
+  # SAST SCANNING
+  # ==========================================================================
+  sast-veyor:
+    needs: changes
+    if: needs.changes.outputs.veyor == 'true'
+    uses: ./.github/workflows/../platform/github-actions/sast-scan.yml
+    with:
+      project: veyor
+
+  sast-biomedical:
+    needs: changes
+    if: needs.changes.outputs.biomedical == 'true'
+    uses: ./.github/workflows/../platform/github-actions/sast-scan.yml
+    with:
+      project: biomedical
+
+  # ==========================================================================
+  # DOCKER BUILD (on push to main)
+  # ==========================================================================
+  build-veyor:
+    needs: [integration-veyor, sast-veyor]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/../platform/github-actions/build-docker.yml
+    with:
+      project: veyor
+      push: true
+      registry: ghcr.io
+    secrets:
+      REGISTRY_USERNAME: ${{ github.actor }}
+      REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+  build-biomedical:
+    needs: [integration-biomedical, sast-biomedical]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/../platform/github-actions/build-docker.yml
+    with:
+      project: biomedical
+      push: true
+      registry: ghcr.io
+    secrets:
+      REGISTRY_USERNAME: ${{ github.actor }}
+      REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+  # ==========================================================================
+  # DEPLOY TO DEV (automatic on push to main)
+  # ==========================================================================
+  deploy-veyor-dev:
+    needs: build-veyor
+    uses: ./.github/workflows/../platform/github-actions/deploy.yml
+    with:
+      project: veyor
+      environment: dev
+      image_tag: ${{ github.sha }}
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG_DEV }}
+
+  deploy-biomedical-dev:
+    needs: build-biomedical
+    uses: ./.github/workflows/../platform/github-actions/deploy.yml
+    with:
+      project: biomedical
+      environment: dev
+      image_tag: ${{ github.sha }}
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG_DEV }}
+
+  # ==========================================================================
+  # E2E TESTS (after dev deploy)
+  # ==========================================================================
+  e2e-veyor:
+    needs: deploy-veyor-dev
+    uses: ./.github/workflows/../platform/github-actions/test-e2e.yml
+    with:
+      project: veyor
+
+  e2e-biomedical:
+    needs: deploy-biomedical-dev
+    uses: ./.github/workflows/../platform/github-actions/test-e2e.yml
+    with:
+      project: biomedical
+
+  # ==========================================================================
+  # DEPLOY TO STAGING (requires manual approval)
+  # Environment protection rules enforce:
+  #   - Required reviewers
+  #   - Wait timer (5 minutes)
+  #   - Branch restriction (main only)
+  # ==========================================================================
+  deploy-veyor-staging:
+    needs: e2e-veyor
+    uses: ./.github/workflows/../platform/github-actions/deploy.yml
+    with:
+      project: veyor
+      environment: staging
+      image_tag: ${{ github.sha }}
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG_STAGING }}
+
+  deploy-biomedical-staging:
+    needs: e2e-biomedical
+    uses: ./.github/workflows/../platform/github-actions/deploy.yml
+    with:
+      project: biomedical
+      environment: staging
+      image_tag: ${{ github.sha }}
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG_STAGING }}
+
+  # ==========================================================================
+  # DEPLOY TO PRODUCTION (requires manual approval + wait timer)
+  # ==========================================================================
+  deploy-veyor-prod:
+    needs: deploy-veyor-staging
+    uses: ./.github/workflows/../platform/github-actions/deploy.yml
+    with:
+      project: veyor
+      environment: production
+      image_tag: ${{ github.sha }}
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG_PROD }}
+
+  deploy-biomedical-prod:
+    needs: deploy-biomedical-staging
+    uses: ./.github/workflows/../platform/github-actions/deploy.yml
+    with:
+      project: biomedical
+      environment: production
+      image_tag: ${{ github.sha }}
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG_PROD }}

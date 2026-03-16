@@ -1,0 +1,62 @@
+# Kubernetes Base — Namespaces
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veyor-dev
+  labels:
+    app.kubernetes.io/part-of: veyor
+    environment: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veyor-staging
+  labels:
+    app.kubernetes.io/part-of: veyor
+    environment: staging
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veyor-prod
+  labels:
+    app.kubernetes.io/part-of: veyor
+    environment: prod
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: biomedical-dev
+  labels:
+    app.kubernetes.io/part-of: biomedical
+    environment: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: biomedical-staging
+  labels:
+    app.kubernetes.io/part-of: biomedical
+    environment: staging
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: biomedical-prod
+  labels:
+    app.kubernetes.io/part-of: biomedical
+    environment: prod
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform
+  labels:
+    app.kubernetes.io/part-of: platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    app.kubernetes.io/part-of: platform

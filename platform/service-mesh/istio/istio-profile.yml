@@ -1,0 +1,68 @@
+# ==============================================================================
+# Istio Service Mesh — Installation & Configuration
+# ==============================================================================
+
+# --- Istio Installation Profile (minimal for free-tier) ---
+# Install with: istioctl install -f istio-profile.yml
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: istio-controlplane
+  namespace: istio-system
+spec:
+  profile: minimal
+  meshConfig:
+    accessLogFile: /dev/stdout
+    accessLogFormat: |
+      {"timestamp":"%START_TIME%","method":"%REQ(:METHOD)%","path":"%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%","protocol":"%PROTOCOL%","response_code":"%RESPONSE_CODE%","response_flags":"%RESPONSE_FLAGS%","upstream_host":"%UPSTREAM_HOST%","duration":"%DURATION%"}
+    enableTracing: true
+    defaultConfig:
+      tracing:
+        zipkin:
+          address: otel-collector.observability:9411
+      holdApplicationUntilProxyStarts: true
+  components:
+    pilot:
+      k8s:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+  values:
+    global:
+      proxy:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+---
+# --- PeerAuthentication: Strict mTLS cluster-wide ---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+---
+# --- Enable sidecar injection for project namespaces ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veyor-dev
+  labels:
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: biomedical-dev
+  labels:
+    istio-injection: enabled

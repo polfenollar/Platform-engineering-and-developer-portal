@@ -1,0 +1,33 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/polfenollar/veyor-agents
+  pullPolicy: IfNotPresent
+  tag: "latest"
+service:
+  type: ClusterIP
+  port: 8000
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 15
+  periodSeconds: 10
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+env:
+  LANGCHAIN_TRACING_V2: "true"
+  LANGCHAIN_PROJECT: "veyor-agents"
+envFrom:
+  - secretRef:
+      name: veyor-agents-secrets

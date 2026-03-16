@@ -1,0 +1,14 @@
+# BioMedical Workers — Python Dockerfile
+FROM python:3.11-slim AS builder
+WORKDIR /app
+COPY pyproject.toml .
+COPY src/ src/
+RUN pip install --no-cache-dir --prefix=/install ".[workers]"
+
+FROM python:3.11-slim AS runner
+WORKDIR /app
+RUN groupadd --gid 1001 app && useradd --uid 1001 --gid 1001 app
+COPY --from=builder /install /usr/local
+COPY --chown=app:app src/ src/
+USER app
+CMD ["python", "-m", "src.workers.main"]

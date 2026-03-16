@@ -1,0 +1,31 @@
+# kind Cluster Configuration — Developer Portal
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: developer-portal
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # HTTP
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      # HTTPS
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+      # Argo CD
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
+      # Grafana
+      - containerPort: 30030
+        hostPort: 30030
+        protocol: TCP
+  - role: worker
+  - role: worker
