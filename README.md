@@ -1,6 +1,7 @@
 # Developer Portal — Platform Engineering Layer
 
 ![Backstage Developer Portal](docs/images/backstage-portal.png)
+![Backstage Scaffolder — Golden Path Templates](docs/images/backstage-scaffolder.png)
 
 **Unified platform engineering layer** managing the full code lifecycle (dev → staging → production) for two concurrent projects. Provides a [Backstage](https://backstage.io) service catalog, golden paths for AI developer agents, full CI/CD automation, GitOps deployments, and an end-to-end observability stack.
 
