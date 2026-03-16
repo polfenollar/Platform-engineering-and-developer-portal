@@ -25,7 +25,7 @@ Both repos are included as Git submodules under `projects/`.
 | **Testing** | Unit · Integration · E2E (Playwright) · Load (k6) |
 | **Security** | Semgrep · CodeQL · npm audit · pip-audit · Gradle dependency-check |
 | **IaC** | Terraform (AWS free-tier) · Crossplane |
-| **GitOps** | Argo CD (app-of-apps pattern) · Argo Workflows |
+| **GitOps** | Argo CD (app-of-apps pattern) · Argo Workflows | SAST DAST scanning for vulnerablities 
 | **Containers** | Docker · Kubernetes (kind local / k3s AWS) · Helm |
 | **Service Mesh** | Istio — mTLS, traffic management, circuit breaking |
 | **Observability** | OpenTelemetry · Prometheus · Loki · Grafana · Langsmith |
