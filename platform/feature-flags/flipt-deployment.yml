@@ -1,0 +1,135 @@
+# ==============================================================================
+# Flipt — Self-hosted GitOps-native Feature Flags
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flipt
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: flipt
+    app.kubernetes.io/part-of: platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: flipt
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: flipt
+    spec:
+      containers:
+        - name: flipt
+          image: flipt/flipt:latest
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9000
+              name: grpc
+          env:
+            - name: FLIPT_DB_URL
+              value: "postgres://flipt:$(FLIPT_DB_PASSWORD)@flipt-db:5432/flipt?sslmode=disable"
+            - name: FLIPT_LOG_LEVEL
+              value: "info"
+            - name: FLIPT_CORS_ENABLED
+              value: "true"
+            - name: FLIPT_CORS_ALLOWED_ORIGINS
+              value: "*"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flipt-db
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: flipt-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: flipt-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: flipt-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: flipt
+            - name: POSTGRES_USER
+              value: flipt
+            - name: POSTGRES_PASSWORD  # Stage 1: injected by ESO from OpenBao
+              valueFrom:
+                secretKeyRef:
+                  name: flipt-db-credentials
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: flipt-db-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata  # Required to avoid "lost+found" error with PVC
+      volumes:
+        - name: flipt-db-data
+          persistentVolumeClaim:         # Stage 1 fix (SPOF-2): PVC replaces emptyDir
+            claimName: flipt-db-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flipt
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: flipt
+spec:
+  selector:
+    app.kubernetes.io/name: flipt
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: grpc
+      port: 9000
+      targetPort: 9000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flipt-db
+  namespace: platform
+spec:
+  selector:
+    app.kubernetes.io/name: flipt-db
+  ports:
+    - port: 5432
+      targetPort: 5432

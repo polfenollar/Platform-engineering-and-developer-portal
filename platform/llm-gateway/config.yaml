@@ -1,0 +1,55 @@
+# ==============================================================================
+# LiteLLM Proxy Configuration — Enterprise Gateway & Governance
+# ==============================================================================
+model_list:
+  # gpt-4o: primary with fallback to claude then gemini (Phase 0 fix: FB-1)
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: "os.environ/OPENAI_API_KEY"
+
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20240620
+      api_key: "os.environ/ANTHROPIC_API_KEY"
+
+  - model_name: gemini-1.5-pro
+    litellm_params:
+      model: gemini/gemini-1.5-pro
+      api_key: "os.environ/GEMINI_API_KEY"
+
+# Phase 0 fix (FB-1): Automatic failover between providers.
+# If OpenAI is down, route to Claude. If Claude is down, route to Gemini.
+router_settings:
+  num_retries: 2
+  retry_after: 5
+  fallbacks:
+    - gpt-4o:
+        - claude-3-5-sonnet
+        - gemini-1.5-pro
+    - claude-3-5-sonnet:
+        - gpt-4o
+        - gemini-1.5-pro
+    - gemini-1.5-pro:
+        - claude-3-5-sonnet
+        - gpt-4o
+  context_window_fallbacks:
+    - gpt-4o:
+        - claude-3-5-sonnet  # 200k context window
+  allowed_fails: 1  # Allow 1 failure before marking provider unhealthy
+  cooldown_time: 60  # Seconds before retrying a failed provider
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  telemetry: false
+  json_logs: true          # Phase 0 (Stage 3 prep): structured JSON stdout for FluentBit
+  log_level: INFO
+  database_url: "postgresql://litellm:litellm@litellm-db:5432/litellm"
+  redis_url: "redis://litellm-redis:6379/0"  # Stage 1: will switch to valkey/valkey
+  redis_retry_on_timeout: true  # Phase 0: graceful Redis/Valkey outage handling
+
+general_settings:
+  master_key: "os.environ/LITELLM_MASTER_KEY"  # Stage 1: ESO will inject this
+  database_connection_timeout: 5
+  store_model_in_db: false  # Phase 0 (Stage 3 pre-work, CASCADE-1): disable sync writes

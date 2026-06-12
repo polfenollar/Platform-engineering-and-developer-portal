@@ -1,0 +1,114 @@
+# ==============================================================================
+# Platform Watchdog — Health-Check CronJob (Phase 0: CASCADE-2 fix)
+# Provides OTel-independent detection path. If OTel/Prometheus pipeline dies,
+# this CronJob still fires alerts directly to Alertmanager every 30 seconds.
+# ==============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: platform-watchdog
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: platform-watchdog
+    app.kubernetes.io/part-of: platform
+spec:
+  schedule: "*/1 * * * *"  # Every minute (smallest cron granularity)
+  concurrencyPolicy: Forbid   # Never run two watchdogs simultaneously
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 50  # Kill if it hasn't finished before next run
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: platform-watchdog
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: watchdog
+              image: curlimages/curl:8.6.0
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+
+                  ALERTMANAGER="http://alertmanager.observability.svc.cluster.local:9093"
+                  TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                  FAILED=""
+
+                  fire_alert() {
+                    local service=$1
+                    local description=$2
+                    echo "🚨 ALERT: $service is DOWN — $description"
+                    curl -s -X POST "${ALERTMANAGER}/api/v2/alerts" \
+                      -H "Content-Type: application/json" \
+                      -d "[{
+                        \"labels\": {
+                          \"alertname\": \"WatchdogServiceDown\",
+                          \"service\": \"${service}\",
+                          \"severity\": \"critical\",
+                          \"source\": \"watchdog-independent\"
+                        },
+                        \"annotations\": {
+                          \"summary\": \"${service} failed watchdog health check\",
+                          \"description\": \"${description}\",
+                          \"detected_at\": \"${TIMESTAMP}\"
+                        },
+                        \"startsAt\": \"${TIMESTAMP}\"
+                      }]" || echo "Warning: Could not reach Alertmanager"
+                  }
+
+                  # --- Check 1: LiteLLM Proxy ---
+                  if ! curl -sf --max-time 5 http://litellm.platform.svc.cluster.local:4000/health/liveliness > /dev/null; then
+                    fire_alert "litellm" "LiteLLM proxy failed health check — LLM requests will fail"
+                    FAILED="${FAILED} litellm"
+                  else
+                    echo "✅ LiteLLM: healthy"
+                  fi
+
+                  # --- Check 2: Flipt Feature Flags ---
+                  if ! curl -sf --max-time 5 http://flipt.platform.svc.cluster.local:8080/health > /dev/null; then
+                    fire_alert "flipt" "Flipt feature flag server is down — flags will use SDK defaults"
+                    FAILED="${FAILED} flipt"
+                  else
+                    echo "✅ Flipt: healthy"
+                  fi
+
+                  # --- Check 3: OTel Collector (self-monitoring) ---
+                  if ! curl -sf --max-time 5 http://otel-collector.observability.svc.cluster.local:13133 > /dev/null; then
+                    fire_alert "otel-collector" "OTel Collector health check failed — telemetry pipeline may be down"
+                    FAILED="${FAILED} otel-collector"
+                  else
+                    echo "✅ OTel Collector: healthy"
+                  fi
+
+                  # --- Check 4: Rollback Controller ---
+                  if ! curl -sf --max-time 5 http://rollback-controller.platform.svc.cluster.local:5000/healthz > /dev/null; then
+                    fire_alert "rollback-controller" "Rollback controller is down — automated incident mitigation is offline"
+                    FAILED="${FAILED} rollback-controller"
+                  else
+                    echo "✅ Rollback Controller: healthy"
+                  fi
+
+                  # --- Check 5: ArgoCD (GitOps sync health) ---
+                  if ! curl -sf --max-time 5 http://argocd-server.argocd.svc.cluster.local/healthz > /dev/null; then
+                    fire_alert "argocd" "ArgoCD server is unreachable — GitOps deployments are blocked"
+                    FAILED="${FAILED} argocd"
+                  else
+                    echo "✅ ArgoCD: healthy"
+                  fi
+
+                  if [ -n "${FAILED}" ]; then
+                    echo "❌ Watchdog detected failures: ${FAILED}"
+                    exit 1
+                  fi
+
+                  echo "✅ All platform services healthy at ${TIMESTAMP}"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  cpu: 50m
+                  memory: 32Mi

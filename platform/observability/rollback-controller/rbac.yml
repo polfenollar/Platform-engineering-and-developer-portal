@@ -1,0 +1,45 @@
+# ==============================================================================
+# Stage 2 — Task 2.3: Rollback Controller — Scoped RBAC
+# Fixes G3: controller previously ran with broad permissions.
+# Now scoped to only what it needs: read ConfigMaps in platform namespace.
+# ==============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rollback-controller
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: rollback-controller
+    app.kubernetes.io/part-of: platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rollback-controller
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: rollback-controller
+    app.kubernetes.io/part-of: platform
+rules:
+  # Read ConfigMaps only — needed to read feature-flag overrides
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  # Cannot: create/delete Deployments, modify Secrets, access other namespaces
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rollback-controller
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: rollback-controller
+    app.kubernetes.io/part-of: platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rollback-controller
+subjects:
+  - kind: ServiceAccount
+    name: rollback-controller
+    namespace: platform

@@ -82,3 +82,99 @@ spec:
               - 10.0.0.0/8
               - 172.16.0.0/12
               - 192.168.0.0/16
+---
+# ==============================================================================
+# Phase 0 Fix (BN-3): Allow cross-namespace egress to platform services
+# Without these rules, the default-deny-all blocks all Flipt/LiteLLM/OTel calls.
+# ==============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-platform
+  namespace: veyor-dev
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: platform
+      ports:
+        - port: 8080    # Flipt HTTP API
+          protocol: TCP
+        - port: 9000    # Flipt gRPC
+          protocol: TCP
+        - port: 4000    # LiteLLM Proxy
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-observability
+  namespace: veyor-dev
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - port: 4317    # OTel gRPC
+          protocol: TCP
+        - port: 4318    # OTel HTTP
+          protocol: TCP
+        - port: 9090    # Prometheus
+          protocol: TCP
+        - port: 3100    # Loki
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-platform
+  namespace: biomedical-dev
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: platform
+      ports:
+        - port: 8080
+          protocol: TCP
+        - port: 9000
+          protocol: TCP
+        - port: 4000
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-observability
+  namespace: biomedical-dev
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - port: 4317
+          protocol: TCP
+        - port: 4318
+          protocol: TCP
+        - port: 9090
+          protocol: TCP
+        - port: 3100
+          protocol: TCP
