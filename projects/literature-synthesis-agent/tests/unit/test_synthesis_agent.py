@@ -53,7 +53,8 @@ def test_quality_node_appends_nothing_to_audit_trail() -> None:
 
 def test_retrieve_node_appends_audit_entry(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "src.agents.synthesis_agent.retrieve_pubmed", lambda q: [{"id": "PMID:1", "title": "T", "abstract": "A"}]
+        "src.agents.synthesis_agent.retrieve_pubmed",
+        lambda q: [{"id": "PMID:1", "title": "T", "abstract": "A"}],
     )
     monkeypatch.setattr("src.agents.synthesis_agent.retrieve_clinical_trials", lambda q: [])
     monkeypatch.setattr("src.agents.synthesis_agent.vector_search", lambda q: [])

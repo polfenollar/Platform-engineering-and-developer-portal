@@ -1,0 +1,259 @@
+# ==============================================================================
+# Stage 3 — Tasks 3.3 + 3.4: FluentBit DaemonSet + ConfigMap
+# Fixes: G11 (no log pipeline), CASCADE-4 (buffer fills without disk backing)
+#
+# Pipeline: LiteLLM stdout (JSON) → FluentBit tail → parse → Loki + PostgreSQL
+# Disk-backed ring buffer prevents OOM when Loki/PG is slow or down.
+# ==============================================================================
+
+# --- FluentBit ConfigMap ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentbit-config
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: fluentbit
+    app.kubernetes.io/part-of: platform
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         5
+        Log_Level     info
+        Log_Format    json
+        Daemon        off
+        Parsers_File  parsers.conf
+        HTTP_Server   on
+        HTTP_Listen   0.0.0.0
+        HTTP_Port     2020
+
+        # Disk-backed ring buffer (CASCADE-4 fix)
+        storage.type              filesystem
+        storage.path              /var/log/fluentbit-buffer
+        storage.sync              normal
+        storage.checksum          off
+        storage.backlog.mem_limit 10M
+
+    # --- Input: Tail LiteLLM stdout from K8s pod log files ---
+    [INPUT]
+        Name              tail
+        Tag               litellm.*
+        Path              /var/log/containers/litellm-*.log
+        Parser            json_docker
+        DB                /var/log/fluentbit.db
+        Mem_Buf_Limit     5MB
+        storage.type      filesystem
+        Refresh_Interval  5
+        Skip_Long_Lines   on
+
+    # --- Input: Tail rollback-controller logs ---
+    [INPUT]
+        Name              tail
+        Tag               rollback.*
+        Path              /var/log/containers/rollback-controller-*.log
+        Parser            json_docker
+        DB                /var/log/fluentbit-rollback.db
+        Mem_Buf_Limit     2MB
+        storage.type      filesystem
+
+    # --- Input: Self-monitoring (FluentBit internal metrics) ---
+    [INPUT]
+        Name              fluentbit_metrics
+        Tag               internal_metrics
+        Scrape_Interval   30
+
+    # --- Filter: Parse JSON payload from LiteLLM ---
+    [FILTER]
+        Name              parser
+        Match             litellm.*
+        Key_Name          log
+        Parser            litellm_json
+        Reserve_Data      on
+
+    # --- Filter: Enrich with K8s metadata ---
+    [FILTER]
+        Name              kubernetes
+        Match             litellm.*
+        Merge_Log         on
+        Keep_Log          off
+        K8S-Logging.Parser  on
+        K8S-Logging.Exclude on
+
+    # --- Output: Loki (primary log store) ---
+    [OUTPUT]
+        Name              loki
+        Match             litellm.*
+        Host              loki.observability.svc.cluster.local
+        Port              3100
+        Labels            job=litellm,namespace=$kubernetes['namespace_name'],pod=$kubernetes['pod_name']
+        Label_Keys        $level,$model,$user_id
+        Batch_Wait        1s
+        Batch_Size        102400
+        storage.total_limit_size  100M
+        Retry_Limit       5
+
+    # --- Output: Loki for rollback controller logs ---
+    [OUTPUT]
+        Name              loki
+        Match             rollback.*
+        Host              loki.observability.svc.cluster.local
+        Port              3100
+        Labels            job=rollback-controller
+        Retry_Limit       5
+
+    # --- Output: PostgreSQL batch insert for structured LLM audit trail ---
+    [OUTPUT]
+        Name              pgsql
+        Match             litellm.*
+        Host              litellm-db.platform.svc.cluster.local
+        Port              5432
+        User              litellm
+        Password          ${LITELLM_DB_PASSWORD}
+        Database          litellm
+        Table             llm_audit_log
+        Timestamp_Key     time
+        Async             on
+        Retry_Limit       3
+
+  parsers.conf: |
+    [PARSER]
+        Name              json_docker
+        Format            json
+        Time_Key          time
+        Time_Format       %Y-%m-%dT%H:%M:%S.%LZ
+        Time_Keep         on
+
+    [PARSER]
+        Name              litellm_json
+        Format            json
+        Time_Key          asctime
+        Time_Format       %Y-%m-%dT%H:%M:%SZ
+---
+# --- FluentBit DaemonSet ---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentbit
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: fluentbit
+    app.kubernetes.io/part-of: platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fluentbit
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fluentbit
+        app.kubernetes.io/part-of: platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2020"
+        prometheus.io/path: "/api/v1/metrics/prometheus"
+    spec:
+      serviceAccountName: fluentbit
+      tolerations:
+        - operator: Exists  # Run on all nodes
+      containers:
+        - name: fluentbit
+          image: fluent/fluent-bit:3.0.7
+          ports:
+            - containerPort: 2020
+              name: metrics
+          env:
+            - name: LITELLM_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-db-credentials
+                  key: POSTGRES_PASSWORD
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 2020
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 2020
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi  # Higher limit to accommodate disk-backed buffer
+          volumeMounts:
+            - name: config
+              mountPath: /fluent-bit/etc
+            - name: varlog
+              mountPath: /var/log
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: buffer
+              mountPath: /var/log/fluentbit-buffer
+      volumes:
+        - name: config
+          configMap:
+            name: fluentbit-config
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+        - name: buffer
+          hostPath:
+            path: /var/log/fluentbit-ring-buffer  # Disk-backed per node
+            type: DirectoryOrCreate
+---
+# RBAC for FluentBit Kubernetes metadata filter
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fluentbit
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fluentbit
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fluentbit
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: fluentbit
+subjects:
+  - kind: ServiceAccount
+    name: fluentbit
+    namespace: observability
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fluentbit
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: fluentbit
+    app.kubernetes.io/part-of: platform
+spec:
+  selector:
+    app.kubernetes.io/name: fluentbit
+  ports:
+    - name: metrics
+      port: 2020
+      targetPort: 2020

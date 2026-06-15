@@ -1,0 +1,233 @@
+# ==============================================================================
+# LiteLLM Proxy — High Availability (HA) Kubernetes Deployments
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: litellm
+    app.kubernetes.io/part-of: platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: litellm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: litellm
+    spec:
+      containers:
+        - name: litellm
+          image: ghcr.io/berriai/litellm:main-latest
+          args:
+            - "--config"
+            - "/app/config/config.yaml"
+            - "--port"
+            - "4000"
+          ports:
+            - containerPort: 4000
+              name: http
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config
+          env:
+            - name: OPENAI_API_KEY      # Stage 1: injected by ESO
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-credentials
+                  key: OPENAI_API_KEY
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-credentials
+                  key: ANTHROPIC_API_KEY
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-credentials
+                  key: GEMINI_API_KEY
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-credentials
+                  key: LITELLM_MASTER_KEY
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 4000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: config-volume
+          configMap:
+            name: litellm-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: platform
+data:
+  config.yaml: |
+    model_list:
+      - model_name: gpt-4o
+        litellm_params:
+          model: openai/gpt-4o
+          api_key: "os.environ/OPENAI_API_KEY"
+      - model_name: claude-3-5-sonnet
+        litellm_params:
+          model: anthropic/claude-3-5-sonnet-20240620
+          api_key: "os.environ/ANTHROPIC_API_KEY"
+      - model_name: gemini-1.5-pro
+        litellm_params:
+          model: gemini/gemini-1.5-pro
+          api_key: "os.environ/GEMINI_API_KEY"
+    litellm_settings:
+      drop_params: true
+      set_verbose: false
+      telemetry: false
+      json_logs: true
+      log_level: INFO
+      database_url: "postgresql://litellm:$(LITELLM_DB_PASSWORD)@litellm-db:5432/litellm"
+      redis_url: "redis://litellm-redis:6379/0"
+      redis_retry_on_timeout: true
+    general_settings:
+      master_key: "os.environ/LITELLM_MASTER_KEY"
+      database_connection_timeout: 5
+      store_model_in_db: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm-db
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: litellm-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: litellm-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: litellm-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: litellm
+            - name: POSTGRES_USER
+              value: litellm
+            - name: POSTGRES_PASSWORD  # Stage 1: injected by ESO
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-db-credentials
+                  key: POSTGRES_PASSWORD
+            - name: LITELLM_DB_PASSWORD  # For config.yaml database_url interpolation
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-db-credentials
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
+          volumeMounts:
+            - name: litellm-db-data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+      volumes:
+        - name: litellm-db-data
+          persistentVolumeClaim:    # Stage 1 fix (SPOF-3): PVC replaces emptyDir
+            claimName: litellm-db-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm-redis
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: litellm-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: litellm-redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: litellm-redis
+    spec:
+      containers:
+        - name: redis
+          image: valkey/valkey:7-alpine   # Stage 1 fix (G14): Valkey replaces Redis
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: platform
+spec:
+  selector:
+    app.kubernetes.io/name: litellm
+  ports:
+    - name: http
+      port: 4000
+      targetPort: 4000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-db
+  namespace: platform
+spec:
+  selector:
+    app.kubernetes.io/name: litellm-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-redis
+  namespace: platform
+spec:
+  selector:
+    app.kubernetes.io/name: litellm-redis
+  ports:
+    - port: 6379
+      targetPort: 6379

@@ -11,7 +11,7 @@ from pathlib import Path
 import structlog
 
 logger = structlog.get_logger(__name__)
-_AUDIT_DIR = Path(os.getenv("AUDIT_LOG_DIR", "/tmp/audit"))
+_AUDIT_DIR = Path(os.getenv("AUDIT_LOG_DIR", "/tmp/audit"))  # noqa: S108
 
 
 def log_agent_decision(

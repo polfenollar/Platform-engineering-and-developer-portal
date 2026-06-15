@@ -7,7 +7,7 @@ metadata:
     backstage.io/techdocs-ref: dir:.
     prometheus.io/scrape: "true"
     prometheus.io/port: "8080"
-    langsmith.io/project: "literature-synthesis-agent"
+    langfuse.io/project: "literature-synthesis-agent"  # Stage 3: migrated from LangSmith → Langfuse (OSS)
   tags:
     - golden-path
     - ai-agent

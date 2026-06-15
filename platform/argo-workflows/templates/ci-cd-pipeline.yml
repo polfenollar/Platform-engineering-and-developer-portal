@@ -49,9 +49,11 @@ spec:
         command: [sh, -c]
         args:
           - |
+            set -euo pipefail
             echo "🔍 Running linters..."
-            pip install ruff && ruff check . || true
-            echo "✅ Lint complete"
+            pip install --quiet ruff
+            ruff check . --output-format=github
+            echo "✅ Lint passed"
 
     - name: unit-test
       container:
@@ -59,10 +61,11 @@ spec:
         command: [sh, -c]
         args:
           - |
+            set -euo pipefail
             echo "🧪 Running unit tests..."
-            pip install pytest pytest-cov
-            python -m pytest tests/unit/ -v --cov=src || true
-            echo "✅ Unit tests complete"
+            pip install --quiet pytest pytest-cov
+            python -m pytest tests/unit/ -v --cov=src --cov-fail-under=80 --cov-report=term-missing
+            echo "✅ Unit tests passed"
 
     - name: sast-scan
       container:
@@ -70,9 +73,10 @@ spec:
         command: [sh, -c]
         args:
           - |
+            set -euo pipefail
             echo "🔒 Running SAST scan..."
-            semgrep scan --config auto . || true
-            echo "✅ SAST scan complete"
+            semgrep scan --config auto --error --json-output=/tmp/semgrep-results.json .
+            echo "✅ SAST scan passed — no findings above threshold"
 
     - name: build
       container:
@@ -90,8 +94,11 @@ spec:
         command: [sh, -c]
         args:
           - |
+            set -euo pipefail
             echo "🔗 Running integration tests..."
-            echo "✅ Integration tests complete"
+            pip install --quiet pytest requests
+            python -m pytest tests/integration/ -v --timeout=120
+            echo "✅ Integration tests passed"
 
     - name: deploy
       inputs:
@@ -102,5 +109,17 @@ spec:
         command: [sh, -c]
         args:
           - |
-            echo "🚀 Deploying to {{inputs.parameters.environment}}..."
-            echo "✅ Deployment complete"
+            set -euo pipefail
+            echo "🚀 Triggering ArgoCD sync for {{inputs.parameters.environment}}..."
+            argocd app sync {{workflow.parameters.project}}-{{inputs.parameters.environment}} \
+              --server argocd-server.argocd.svc.cluster.local \
+              --auth-token "${ARGOCD_TOKEN}" \
+              --timeout 300 \
+              --health
+            echo "✅ Deployment to {{inputs.parameters.environment}} complete and healthy"
+        env:
+          - name: ARGOCD_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: argocd-deploy-token
+                key: token

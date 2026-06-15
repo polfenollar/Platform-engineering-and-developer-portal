@@ -1,0 +1,85 @@
+# ==============================================================================
+# GitOps Rollback Controller — Kubernetes Manifests
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rollback-controller
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: rollback-controller
+    app.kubernetes.io/part-of: platform
+spec:
+  replicas: 2  # Phase 0 fix (SPOF-6): 2 replicas for HA
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rollback-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rollback-controller
+    spec:
+      serviceAccountName: rollback-controller  # Stage 2: scoped RBAC (rbac.yml)
+      containers:
+        - name: controller
+          image: python:3.11-alpine
+          command: ["python", "-u", "/app/app.py"]
+          ports:
+            - containerPort: 5000
+              name: http
+          env:
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-secrets     # Stage 1: now managed by ESO (github-token-secret ExternalSecret)
+                  key: token
+            - name: GITHUB_REPO
+              value: "polfenollar/Platform-engineering-and-developer-portal"
+            - name: GITHUB_BRANCH
+              value: "main"
+            - name: FEATURES_FILE_PATH
+              value: "platform/feature-flags/features.json"
+            - name: FLIPT_API_URL
+              value: "http://flipt.platform.svc.cluster.local:8080"
+            - name: PORT
+              value: "5000"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: app-code
+              mountPath: /app
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: app-code
+          configMap:
+            name: rollback-controller-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollback-controller
+  namespace: platform
+spec:
+  selector:
+    app.kubernetes.io/name: rollback-controller
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000

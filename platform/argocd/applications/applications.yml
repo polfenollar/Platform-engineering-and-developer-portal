@@ -49,7 +49,8 @@ spec:
   project: veyor
   source:
     repoURL: https://github.com/polfenollar/developer-portal.git
-    targetRevision: main
+    # Phase 0 fix (BN-5): Staging tracks release branch, NOT main.
+    targetRevision: release/latest
     path: platform/kubernetes/charts/veyor-backend
     helm:
       valueFiles:
@@ -74,7 +75,9 @@ spec:
   project: veyor
   source:
     repoURL: https://github.com/polfenollar/developer-portal.git
-    targetRevision: main
+    # Phase 0 fix (BN-5): Prod pinned to tested tag. NEVER use 'main'.
+    # Update this tag manually after staging validation.
+    targetRevision: v0.1.0
     path: platform/kubernetes/charts/veyor-backend
     helm:
       valueFiles:

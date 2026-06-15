@@ -62,27 +62,26 @@ async def synthesise(req: SynthesisRequest) -> SynthesisResponse:
     log.info("synthesis_request_received", query=req.query)
 
     _requests_total.inc()
-    with _request_latency.time():
-        with _tracer.start_as_current_span("synthesis_pipeline") as span:
-            span.set_attribute("query", req.query)
-            span.set_attribute("correlation_id", correlation_id)
+    with _request_latency.time(), _tracer.start_as_current_span("synthesis_pipeline") as span:
+        span.set_attribute("query", req.query)
+        span.set_attribute("correlation_id", correlation_id)
 
-            initial: SynthesisState = {
-                "query": req.query,
-                "pubmed_docs": [],
-                "clinical_docs": [],
-                "vector_docs": [],
-                "synthesis": "",
-                "sources": [],
-                "correlation_id": correlation_id,
-                "audit_trail": [],
-            }
+        initial: SynthesisState = {
+            "query": req.query,
+            "pubmed_docs": [],
+            "clinical_docs": [],
+            "vector_docs": [],
+            "synthesis": "",
+            "sources": [],
+            "correlation_id": correlation_id,
+            "audit_trail": [],
+        }
 
-            try:
-                result: SynthesisState = await runnable.ainvoke(initial)  # type: ignore[assignment]
-            except Exception as exc:
-                log.error("synthesis_failed", error=str(exc))
-                raise HTTPException(status_code=500, detail="Synthesis pipeline failed") from exc
+        try:
+            result: SynthesisState = await runnable.ainvoke(initial)  # type: ignore[assignment]
+        except Exception as exc:
+            log.error("synthesis_failed", error=str(exc))
+            raise HTTPException(status_code=500, detail="Synthesis pipeline failed") from exc
 
     log.info("synthesis_complete", source_count=len(result["sources"]))
     return SynthesisResponse(

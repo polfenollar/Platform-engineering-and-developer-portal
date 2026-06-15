@@ -1,8 +1,10 @@
 # ==============================================================================
-# OpenTelemetry Collector — Kubernetes Deployment
+# OpenTelemetry Collector — DaemonSet (Phase 0: SPOF-5 + SPOF-9 fix)
+# Converted from Deployment to DaemonSet so every node has its own collector.
+# ConfigMap now contains the real pipeline config from otel-config.yml.
 # ==============================================================================
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: otel-collector
   namespace: observability
@@ -10,16 +12,25 @@ metadata:
     app.kubernetes.io/name: otel-collector
     app.kubernetes.io/part-of: platform
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: otel-collector
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
   template:
     metadata:
       labels:
         app.kubernetes.io/name: otel-collector
         app.kubernetes.io/part-of: platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
     spec:
+      serviceAccountName: otel-collector
+      tolerations:
+        - operator: Exists  # Run on all nodes including control-plane
       containers:
         - name: otel-collector
           image: otel/opentelemetry-collector-contrib:0.96.0
@@ -27,10 +38,23 @@ spec:
           ports:
             - containerPort: 4317
               name: otlp-grpc
+              hostPort: 4317
             - containerPort: 4318
               name: otlp-http
+              hostPort: 4318
             - containerPort: 8888
               name: metrics
+          env:
+            - name: ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PROJECT
+              value: "platform"
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           resources:
             requests:
               cpu: 100m
@@ -38,6 +62,18 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133  # OTel health check extension
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
           volumeMounts:
             - name: config
               mountPath: /etc/otel
@@ -53,6 +89,16 @@ metadata:
   namespace: observability
 data:
   otel-config.yml: |
+    # ==============================================================================
+    # OTel Collector — Full Pipeline Config (Phase 0: SPOF-9 fix)
+    # Receivers → Processors → Exporters for traces, metrics, and logs.
+    # ==============================================================================
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      zpages:
+        endpoint: 0.0.0.0:55679
+
     receivers:
       otlp:
         protocols:
@@ -61,46 +107,155 @@ data:
           http:
             endpoint: 0.0.0.0:4318
 
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: 'kubernetes-pods'
+              kubernetes_sd_configs:
+                - role: pod
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: true
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                  action: replace
+                  target_label: __metrics_path__
+                  regex: (.+)
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port, __meta_kubernetes_pod_ip]
+                  action: replace
+                  target_label: __address__
+                  regex: (.+);(.+)
+                  replacement: $${2}:$${1}
+
     processors:
       batch:
         timeout: 5s
         send_batch_size: 1024
+
       memory_limiter:
         check_interval: 1s
-        limit_mib: 256
-        spike_limit_mib: 64
+        limit_mib: 400
+        spike_limit_mib: 80
+
+      resource:
+        attributes:
+          - key: service.namespace
+            from_attribute: k8s.namespace.name
+            action: upsert
+          - key: deployment.environment
+            value: "${ENVIRONMENT}"
+            action: upsert
+          - key: k8s.node.name
+            value: "${K8S_NODE_NAME}"
+            action: upsert
+
+      attributes:
+        actions:
+          - key: project
+            value: "${PROJECT}"
+            action: upsert
+
+      # Self-monitoring: track throughput so Prometheus can alert if it drops to zero
+      metricstransform/self:
+        transforms:
+          - include: otelcol_receiver_accepted_spans
+            match_type: strict
+            action: update
+            new_name: platform_otel_spans_received_total
 
     exporters:
+      # Metrics → Prometheus remote-write
+      prometheusremotewrite:
+        endpoint: "http://prometheus.observability.svc.cluster.local:9090/api/v1/write"
+        tls:
+          insecure: true
+        headers:
+          X-Prometheus-Remote-Write-Version: "0.1.0"
+
+      # Logs → Loki
+      loki:
+        endpoint: "http://loki.observability.svc.cluster.local:3100/loki/api/v1/push"
+        labels:
+          attributes:
+            service.name: "service_name"
+            service.namespace: "namespace"
+            severity: "severity"
+            k8s.node.name: "node"
+
+      # Traces → OTLP (Jaeger / Tempo)
+      otlp/traces:
+        endpoint: "jaeger.observability.svc.cluster.local:4317"
+        tls:
+          insecure: true
+
+      # Debug (structured, low-verbosity)
       debug:
         verbosity: basic
-      prometheusremotewrite:
-        endpoint: "http://prometheus:9090/api/v1/write"
 
     service:
+      extensions: [health_check, zpages]
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, batch]
-          exporters: [debug]
+          processors: [memory_limiter, batch, resource]
+          exporters: [otlp/traces]
+
         metrics:
-          receivers: [otlp]
-          processors: [memory_limiter, batch]
-          exporters: [debug]
+          receivers: [otlp, prometheus]
+          processors: [memory_limiter, batch, resource, metricstransform/self]
+          exporters: [prometheusremotewrite]
+
         logs:
           receivers: [otlp]
-          processors: [memory_limiter, batch]
-          exporters: [debug]
+          processors: [memory_limiter, batch, resource, attributes]
+          exporters: [loki]
+
       telemetry:
         logs:
           level: info
         metrics:
           address: 0.0.0.0:8888
 ---
+# RBAC for prometheus scrape discovery
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "endpoints", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-collector
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: observability
+---
 apiVersion: v1
 kind: Service
 metadata:
   name: otel-collector
   namespace: observability
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: platform
 spec:
   selector:
     app.kubernetes.io/name: otel-collector
@@ -114,3 +269,6 @@ spec:
     - name: metrics
       port: 8888
       targetPort: 8888
+    - name: health
+      port: 13133
+      targetPort: 13133

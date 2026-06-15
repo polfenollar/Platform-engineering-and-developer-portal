@@ -1,0 +1,19 @@
+{
+  "namespace": "default",
+  "flags": [
+    {
+      "key": "new-recommendation-algorithm",
+      "name": "New Recommendation Algorithm",
+      "description": "Toggles the new machine learning recommendation system",
+      "type": "BOOLEAN_FLAG",
+      "enabled": true
+    },
+    {
+      "key": "ai-assisted-quoting",
+      "name": "AI Assisted Quoting",
+      "description": "Enables AI auto-quoting for carrier quote requests",
+      "type": "BOOLEAN_FLAG",
+      "enabled": true
+    }
+  ]
+}

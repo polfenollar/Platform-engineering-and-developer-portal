@@ -4,16 +4,15 @@ Agent role: biomedical-core
 Guardrail: ARCHITECTURE_BIOMEDICAL.md — Agent Layer rules apply.
 """
 
-import logging
 import os
-from typing import Annotated, TypedDict
+from typing import TypedDict
 
 import structlog
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
-from src.tools.retrieval import retrieve_pubmed, retrieve_clinical_trials, vector_search
 from src.tools.audit import log_agent_decision
+from src.tools.retrieval import retrieve_clinical_trials, retrieve_pubmed, vector_search
 
 logger = structlog.get_logger(__name__)
 
