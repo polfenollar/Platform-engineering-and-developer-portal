@@ -170,9 +170,23 @@ argo-workflows-install: ## Install Argo Workflows
 observability-up: ## Deploy observability stack
 	kubectl apply -f platform/observability/otel-collector/deployment.yml
 	kubectl apply -f platform/observability/prometheus/prometheus.yml
+	kubectl apply -f platform/observability/prometheus/alertmanager.yml
 	kubectl apply -f platform/observability/loki/deployment.yml
 	kubectl apply -f platform/observability/grafana/deployment.yml
+	kubectl apply -f platform/observability/rollback-controller/configmap.yml
+	kubectl apply -f platform/observability/rollback-controller/deployment.yml
 	@echo "✅ Observability stack deployed."
+
+# --- Feature Flags & LLM Gateway ---
+.PHONY: deploy-flipt
+deploy-flipt: ## Deploy Flipt feature flag stack
+	kubectl apply -f platform/feature-flags/flipt-deployment.yml
+	@echo "✅ Flipt deployed."
+
+.PHONY: deploy-litellm
+deploy-litellm: ## Deploy LiteLLM Proxy gateway
+	kubectl apply -f platform/llm-gateway/deployment.yml
+	@echo "✅ LiteLLM deployed."
 
 # --- Docker ---
 .PHONY: docker-build

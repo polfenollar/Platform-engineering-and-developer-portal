@@ -10,7 +10,6 @@ from typing import Any
 import httpx
 import structlog
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter
 
 logger = structlog.get_logger(__name__)
 
@@ -48,7 +47,10 @@ def retrieve_pubmed(query: str, max_results: int = 10) -> list[dict[str, Any]]:
         )
         fetch_resp.raise_for_status()
         # Simplified parse — production would use lxml
-        docs = [{"id": f"PMID:{pmid}", "title": f"PubMed article {pmid}", "abstract": ""} for pmid in ids]
+        docs = [
+            {"id": f"PMID:{pmid}", "title": f"PubMed article {pmid}", "abstract": ""}
+            for pmid in ids
+        ]
         log.info("pubmed_fetched", count=len(docs))
         return docs
     except httpx.HTTPError as exc:
@@ -79,7 +81,11 @@ def retrieve_clinical_trials(query: str, max_results: int = 5) -> list[dict[str,
             {
                 "id": s["protocolSection"]["identificationModule"]["nctId"],
                 "title": s["protocolSection"]["identificationModule"].get("briefTitle", ""),
-                "abstract": s["protocolSection"].get("descriptionModule", {}).get("briefSummary", ""),
+                "abstract": (
+                    s["protocolSection"]
+                    .get("descriptionModule", {})
+                    .get("briefSummary", "")
+                ),
             }
             for s in studies
         ]
