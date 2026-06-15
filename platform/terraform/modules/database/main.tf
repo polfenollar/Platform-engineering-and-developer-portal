@@ -78,8 +78,8 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids = [var.security_group_id]
 
   publicly_accessible = false
-  skip_final_snapshot  = var.environment != "prod"
-  multi_az             = false
+  skip_final_snapshot = var.environment != "prod"
+  multi_az            = false
 
   backup_retention_period = var.environment == "prod" ? 7 : 1
 

@@ -80,7 +80,7 @@ lint-java:
 .PHONY: lint-python
 lint-python:
 	@echo "🔍 Linting Python..."
-	cd projects/biomedical-ai && ruff check src/ tests/
+	cd projects/literature-synthesis-agent && ruff check src/ tests/
 	cd projects/veyor-marketplace/agents && ruff check .
 
 .PHONY: lint-go
@@ -98,13 +98,13 @@ test-unit: ## Run unit tests
 	@echo "🧪 Running unit tests..."
 	cd projects/veyor-marketplace/frontend && npm test
 	cd projects/veyor-marketplace/backend && ./gradlew test
-	cd projects/biomedical-ai && python -m pytest tests/unit/ -v
+	cd projects/literature-synthesis-agent && python -m pytest tests/unit/ -v
 
 .PHONY: test-integration
 test-integration: ## Run integration tests
 	@echo "🔗 Running integration tests..."
 	cd projects/veyor-marketplace/backend && ./gradlew integrationTest
-	cd projects/biomedical-ai && python -m pytest tests/integration/ -v
+	cd projects/literature-synthesis-agent && python -m pytest tests/integration/ -v
 
 .PHONY: test-e2e
 test-e2e: ## Run end-to-end tests
@@ -131,7 +131,7 @@ scan-deps: ## Scan dependencies for vulnerabilities
 	@echo "🔒 Scanning dependencies..."
 	cd projects/veyor-marketplace/frontend && npm audit
 	cd projects/veyor-marketplace/backend && ./gradlew dependencyCheckAnalyze
-	cd projects/biomedical-ai && pip-audit
+	cd projects/literature-synthesis-agent && pip-audit
 
 # --- Infrastructure ---
 .PHONY: tf-init
@@ -196,8 +196,8 @@ docker-build: ## Build all Docker images
 	docker build -t veyor-backend:dev -f platform/kubernetes/docker/veyor/Dockerfile.backend projects/veyor-marketplace/backend
 	docker build -t veyor-quoting:dev -f platform/kubernetes/docker/veyor/Dockerfile.quoting projects/veyor-marketplace/quoting-service
 	docker build -t veyor-agents:dev -f platform/kubernetes/docker/veyor/Dockerfile.agents projects/veyor-marketplace/agents
-	docker build -t biomedical-api:dev -f platform/kubernetes/docker/biomedical/Dockerfile.api projects/biomedical-ai
-	docker build -t biomedical-workers:dev -f platform/kubernetes/docker/biomedical/Dockerfile.workers projects/biomedical-ai
+	docker build -t biomedical-api:dev -f platform/kubernetes/docker/biomedical/Dockerfile.api projects/literature-synthesis-agent
+	docker build -t biomedical-workers:dev -f platform/kubernetes/docker/biomedical/Dockerfile.workers projects/literature-synthesis-agent
 	@echo "✅ All images built."
 
 .PHONY: docker-load

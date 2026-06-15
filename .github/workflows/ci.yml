@@ -129,7 +129,7 @@ jobs:
   # ============================================================
   build-veyor:
     name: Build / Veyor
-    needs: [integration-veyor, sast-veyor]
+    needs: [changes, integration-veyor, sast-veyor]
     if: |
       always() &&
       needs.changes.outputs.veyor == 'true' &&
@@ -146,7 +146,7 @@ jobs:
 
   build-biomedical:
     name: Build / BioMedical
-    needs: [integration-biomedical, sast-biomedical]
+    needs: [changes, integration-biomedical, sast-biomedical]
     if: |
       always() &&
       needs.changes.outputs.biomedical == 'true' &&
