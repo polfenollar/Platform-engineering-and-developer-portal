@@ -1,8 +1,135 @@
 # Developer Portal — Platform Engineering Layer
 
-![Backstage Developer Portal](docs/images/backstage-portal.png)
-![Backstage Scaffolder — Golden Path Templates](docs/images/backstage-scaffolder.png)
+```mermaid
+flowchart TD
+    %% ==========================================
+    %% RBAC PERMISSION POLICY (Cross-cutting)
+    %% ==========================================
+    subgraph RBAC [RBAC Permission Policy - Evaluated on every request]
+        rbac_req(["START: Permission Policy Request"])
+        rbac_admin{"DECISION: Is User Admin?"}
+        rbac_allowA["RESULT: ALLOW\n(Total administrator bypass)"]
+        
+        rbac_delete{"DECISION: Is permission\ncatalog.entity.delete?"}
+        rbac_owner{"DECISION: Is User\nEntity Owner?"}
+        rbac_allowB["RESULT: ALLOW\n(Owner can delete their entity)"]
+        rbac_denyA["RESULT: DENY\n(Not the owner)"]
+        
+        rbac_guest{"DECISION: Is User Guest?"}
+        rbac_tpl{"DECISION: Is permission\nscaffolder.template.play?"}
+        rbac_denyB["RESULT: DENY\n(Guests do not run templates)"]
+        
+        rbac_action{"DECISION: Is action\ndelete / update?"}
+        rbac_denyC["RESULT: DENY\n(Destructive action on another's resource)"]
+        rbac_allowC(["RESULT: ALLOW\n(Default stance)"])
 
+        rbac_req --> rbac_admin
+        rbac_admin -- "Yes" --> rbac_allowA
+        rbac_admin -- "No" --> rbac_delete
+        
+        rbac_delete -- "Yes" --> rbac_owner
+        rbac_owner -- "Yes" --> rbac_allowB
+        rbac_owner -- "No" --> rbac_denyA
+        
+        rbac_delete -- "No" --> rbac_guest
+        rbac_guest -- "Yes" --> rbac_tpl
+        rbac_tpl -- "Yes" --> rbac_denyB
+        rbac_tpl -- "No" --> rbac_action
+        
+        rbac_guest -- "No" --> rbac_action
+        rbac_action -- "Yes" --> rbac_denyC
+        rbac_action -- "No" --> rbac_allowC
+    end
+
+    %% ==========================================
+    %% WORKFLOW A: SHIFT-LEFT CI
+    %% ==========================================
+    subgraph WFA [Workflow A: Shift-Left CI Pipeline]
+        wfa_start(["START: Developer IDE\n(Local commit)"])
+        wfa_n1{"LOCAL GATE: Husky / Gitleaks\n(Blocks if secrets detected)"}
+        
+        wfa_p1["SAST: Semgrep"]
+        wfa_p2["Linting: ESLint/Ruff"]
+        wfa_p3["Unit Tests\n(Coverage > 80%)"]
+        wfa_p4["Kyverno CLI\n(K8s dry-run)"]
+        
+        wfa_n3["GITHUB: Pull Request\n(Approved after checks)"]
+        wfa_n4(["END: Merge to main"])
+
+        wfa_start --> wfa_n1
+        wfa_n1 --> wfa_p1 & wfa_p2 & wfa_p3 & wfa_p4
+        wfa_p1 & wfa_p2 & wfa_p3 & wfa_p4 --> wfa_n3
+        wfa_n3 --> wfa_n4
+    end
+
+    %% ==========================================
+    %% WORKFLOW B: GITOPS & SECRETS
+    %% ==========================================
+    subgraph WFB [Workflow B: GitOps & Secrets Loop]
+        direction LR
+        wfb_start(["START: GitHub Repo\n(Merged config)"])
+        wfb_n1["Argo CD Sync Engine\n(Detects drift)"]
+        wfb_n2["Argo CD deploys\n(Manifests + CRs)"]
+        wfb_n3["External Secrets Operator\n(Auth to OpenBao)"]
+        wfb_n4["OpenBao\n(Decrypts secret)"]
+        wfb_n5["ESO creates Secret\n(Native K8s)"]
+        wfb_n6(["END: Pod restarts\n(Mounts env var)"])
+
+        wfb_start --> wfb_n1 --> wfb_n2 --> wfb_n3 --> wfb_n4 --> wfb_n5 --> wfb_n6
+    end
+
+    %% ==========================================
+    %% WORKFLOW C: RUNTIME & LOGS
+    %% ==========================================
+    subgraph WFC [Workflow C: Runtime Request Path & Logging]
+        wfc_start(["START: Client App Request"])
+        wfc_n1["Istio Ambient (ztunnel)\n(mTLS validation)"]
+        wfc_n2["App Container\n(Processes request)"]
+        
+        wfc_b1["Flipt API\n(Local feature flag eval)"]
+        wfc_n3["LiteLLM Proxy Gateway\n(Routes LLM query)"]
+        
+        wfc_q1["Valkey\n(Rate limits)"]
+        wfc_q2["OpenAI / Anthropic\n(LLM Provider)"]
+        wfc_q3["Langfuse\n(Traces)"]
+        wfc_q4["stdout\n(JSON log)"]
+        
+        wfc_n4["FluentBit DaemonSet\n(Reads stdout)"]
+        wfc_leaf1["Disk queue\n(Backpressure safeguard)"]
+        wfc_leaf2(["END: Loki & Postgres\n(Log destination)"])
+
+        wfc_start --> wfc_n1 --> wfc_n2
+        wfc_n2 --> wfc_b1
+        wfc_n2 --> wfc_n3
+        wfc_n3 --> wfc_q1 & wfc_q2 & wfc_q3 & wfc_q4
+        wfc_q1 & wfc_q2 & wfc_q3 & wfc_q4 --> wfc_n4
+        wfc_n4 --> wfc_leaf1 & wfc_leaf2
+    end
+
+    %% ==========================================
+    %% WORKFLOW D: SELF-HEALING
+    %% ==========================================
+    subgraph WFD [Workflow D: Self-Healing Rollback Loop]
+        wfd_start(["INCIDENT: Outage / Latency / Error"])
+        wfd_n1["Prometheus\n(Detects SLO breach)"]
+        wfd_n2["Alertmanager\n(Calls webhook)"]
+        wfd_n3["Rollback Controller\n(Listener / Deduplication)"]
+        
+        wfd_fast["FAST PATH -> Flipt\n(Turns off flag via API)"]
+        wfd_slow["SLOW PATH -> GitHub\n(Opens PR reverting config)"]
+
+        wfd_start --> wfd_n1 --> wfd_n2 --> wfd_n3
+        wfd_n3 --> wfd_fast & wfd_slow
+    end
+
+    %% ==========================================
+    %% GLOBAL CONNECTIONS (The High-Level Flow)
+    %% ==========================================
+    wfa_n4 ==>|Merge to main triggers GitOps| wfb_start
+    wfb_n6 ==>|Pod is ready & serving traffic| wfc_start
+    wfc_leaf2 -.->|System anomalies detected| wfd_start
+    wfd_slow -.->|PR pushed back to repo| wfa_start
+```
 **Unified platform engineering layer** managing the full code lifecycle (dev → staging → production) for two concurrent projects. Provides a [Backstage](https://backstage.io) service catalog, golden paths for AI developer agents, full CI/CD automation, GitOps deployments, and an end-to-end observability stack.
 
 ## Projects Under Management
