@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔒 Running pre-commit security checks..."
+
+# Check if gitleaks is installed
+if command -v gitleaks >/dev/null 2>&1; then
+  echo "🔍 Running Gitleaks secret scan on staged changes..."
+  gitleaks protect --staged --verbose
+else
+  echo "⚠️ Gitleaks CLI not found in PATH. Skipping pre-commit secret scan."
+  echo "💡 Install it via: brew install gitleaks"
+fi

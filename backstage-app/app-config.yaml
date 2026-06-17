@@ -1,6 +1,9 @@
 # ==============================================================================
 # Backstage — app-config.yaml
 # ==============================================================================
+permission:
+  enabled: true
+
 app:
   title: Developer Portal — Platform Engineering
   baseUrl: http://localhost:3000

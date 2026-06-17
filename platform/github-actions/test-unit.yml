@@ -22,7 +22,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: projects/veyor-marketplace/frontend/package-lock.json
       - run: cd projects/veyor-marketplace/frontend && npm ci
-      - run: cd projects/veyor-marketplace/frontend && npm test -- --coverage --watchAll=false
+      - name: Run tests with 80% coverage threshold
+        run: cd projects/veyor-marketplace/frontend && npm test -- --coverage --watchAll=false --coverageThreshold='{"global":{"lines":80}}'
       - uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
@@ -59,7 +60,7 @@ jobs:
           cd projects/veyor-marketplace/agents
           pip install -r requirements.txt
           pip install pytest pytest-cov
-          python -m pytest tests/ -v --cov=. --cov-report=xml
+          python -m pytest tests/ -v --cov=. --cov-report=xml --cov-fail-under=80
       - name: Test BioMedical
         if: inputs.project == 'biomedical'
         run: |
@@ -80,8 +81,24 @@ jobs:
         run: |
           cd projects/veyor-marketplace/quoting-service
           go test ./... -v -race -coverprofile=coverage.out
-          go tool cover -func=coverage.out
+          coverage=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+          echo "Quoting Service Coverage: $coverage%"
+          if [ ! -z "$coverage" ]; then
+            if awk "BEGIN {exit !($coverage < 80.0)}"; then
+              echo "❌ Code coverage is $coverage%, which is below the 80% threshold!"
+              exit 1
+            fi
+          fi
       - name: Test Carrier Simulator
         run: |
           cd projects/veyor-marketplace/carrier-simulator
           go test ./... -v -race -coverprofile=coverage.out
+          coverage=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+          echo "Carrier Simulator Coverage: $coverage%"
+          if [ ! -z "$coverage" ]; then
+            if awk "BEGIN {exit !($coverage < 80.0)}"; then
+              echo "❌ Code coverage is $coverage%, which is below the 80% threshold!"
+              exit 1
+            fi
+          fi
+

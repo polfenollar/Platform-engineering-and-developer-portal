@@ -1,0 +1,72 @@
+# ==============================================================================
+# Stage 4 — Task 4.1: Kyverno Installation
+# Kyverno is the policy engine for Kubernetes (Apache-2.0).
+# ==============================================================================
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: platform
+spec:
+  project: default
+  source:
+    repoURL: https://kyverno.github.io/kyverno/
+    chart: kyverno
+    targetRevision: "3.2.3"
+    helm:
+      values: |
+        admissionController:
+          replicaCount: 2
+          webhooks:
+            failurePolicy: Ignore
+            # Exclude critical namespaces to avoid self-healing/bootstrapping deadlocks (FB-3)
+            excludeNamespaces:
+              - kube-system
+              - kyverno
+              - argocd
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+        backgroundController:
+          replicaCount: 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        cleanupController:
+          replicaCount: 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        reportsController:
+          replicaCount: 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

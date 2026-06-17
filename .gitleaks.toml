@@ -1,0 +1,38 @@
+# Gitleaks Configuration
+[allowlist]
+description = "Global allowlist"
+paths = [
+  '''node_modules''',
+  '''yarn.lock''',
+  '''package-lock.json''',
+]
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''(?i)sk-[a-zA-Z0-9]{48}'''
+tags = ["key", "openai"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API Key"
+regex = '''(?i)sk-ant-sid01-[a-zA-Z0-9_\-]{93}-[a-zA-Z0-9_\-]{8}'''
+tags = ["key", "anthropic"]
+
+[[rules]]
+id = "google-gemini-api-key"
+description = "Google Gemini API Key"
+regex = '''(?i)AIzaSy[a-zA-Z0-9_\-]{33}'''
+tags = ["key", "gemini"]
+
+[[rules]]
+id = "litellm-master-key"
+description = "LiteLLM Master Key"
+regex = '''(?i)sk-litellm-[a-zA-Z0-9_\-]{32,64}'''
+tags = ["key", "litellm"]
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(?:api_key|apikey|secret|password|token)\s*[:=]\s*["'][a-zA-Z0-9_\-]{16,64}["']'''
+tags = ["key", "generic"]

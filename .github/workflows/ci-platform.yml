@@ -76,3 +76,8 @@ jobs:
           sudo mv actionlint /usr/local/bin/
       - name: Lint workflow files
         run: actionlint .github/workflows/*.yml
+
+  policy-check:
+    name: Kyverno Policy Validation
+    uses: ./.github/workflows/reusable-policy-check.yml
+

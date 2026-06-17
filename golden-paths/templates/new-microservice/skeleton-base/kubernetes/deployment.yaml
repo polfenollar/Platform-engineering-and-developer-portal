@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${{ name }}
+  labels:
+    app: ${{ name }}
+    project: ${{ project }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ${{ name }}
+  template:
+    metadata:
+      labels:
+        app: ${{ name }}
+        sidecar.istio.io/inject: "true"
+    spec:
+      containers:
+        - name: app
+          image: polfenollar/${{ name }}:latest
+          ports:
+            - containerPort: ${{ port }}
+              name: http
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          env:
+            - name: PORT
+              value: "${{ port }}"
+            - name: PROJECT_NAME
+              value: "${{ project }}"
+            {%- if needsDatabase %}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${{ name }}-env-secrets
+                  key: DATABASE_PASSWORD
+            {%- endif %}
+            {%- if needsCache %}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${{ name }}-env-secrets
+                  key: REDIS_PASSWORD
+            {%- endif %}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: ${{ port }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: ${{ port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10

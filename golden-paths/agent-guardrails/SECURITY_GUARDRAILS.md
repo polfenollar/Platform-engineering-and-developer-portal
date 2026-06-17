@@ -7,7 +7,7 @@
 | **No hardcoded secrets** | Never commit API keys, passwords, tokens, or credentials |
 | **Environment variables** | All secrets via env vars; `.env.example` files for documentation |
 | **.gitignore** | `.env`, `.env.local`, `*.pem`, `*.key`, `*.tfvars` must be in `.gitignore` |
-| **CI/CD secrets** | GitHub Actions secrets or sealed secrets in K8s |
+| **K8s Secret Injection** | MUST use **OpenBao** and **External Secrets Operator (ESO)**. Native Kubernetes Secrets or Sealed Secrets are prohibited for production credentials. |
 | **Rotation** | Secrets must have rotation procedures documented |
 
 ## Dependency Security
@@ -64,15 +64,19 @@ Rules: OWASP Top 10, injection, auth bypass, XSS, SSRF
 | RBAC | Least-privilege `ServiceAccount` per pod |
 | Network policies | Default deny; explicit allow per service |
 | Pod security | `restricted` Pod Security Standard |
-| Secrets | K8s Secrets encrypted at rest; prefer ExternalSecrets |
+| Secrets | Managed entirely by OpenBao + ExternalSecrets Operator. Avoid manual Secret creation. |
 | Admission | OPA/Kyverno policies for resource limits, labels |
 
-## AI Agent Security
+## AI Agent Security & IAM Boundaries
 
 | Rule | Detail |
 |---|---|
-| Read-only | AI agents have read-only access to data stores |
-| Rate limiting | Max 10 LLM calls per user request |
-| Input sanitization | User prompts sanitized before passing to LLM |
-| Output filtering | PII detection on agent outputs |
-| Prompt injection | System prompts hardened against injection attacks |
+| **Least Privilege** | AI agents must only have access to repositories matching their scope. No organization-wide admin keys allowed. |
+| **Workload Identity**| Prefer OpenID Connect (OIDC) / AWS IAM Role assumption over static long-lived credentials. |
+| **Token Scoping**   | Agent GitHub Actions tokens must be restricted to minimal permissions (`contents: read`, `pull-requests: write`). |
+| **No Self-Merge**   | AI agents are blocked from approving Pull Requests or merging directly to protected branches. |
+| **Branch Protection**| All repositories must enforce branch protection: minimum 1 human review, no bypassing requirements, no direct push. |
+| **Read-only Stores**| AI agents have read-only access to staging/production data stores and cloud resources. |
+| **Rate limiting**   | Max 10 LLM calls per user request to prevent runaway loops. |
+| **Input/Output**    | Prompt sanitization before LLM and PII filtering on agent outputs. |
+

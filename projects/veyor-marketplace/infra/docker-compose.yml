@@ -1,0 +1,153 @@
+# Default credentials below are for local development only.
+# Do not use in production or public deployments; override via env or secrets.
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16
+    container_name: veyor_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: veyor
+      POSTGRES_PASSWORD: veyor
+      POSTGRES_DB: marketplace
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: veyor_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: veyor_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: veyor_kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.3
+    container_name: veyor_keycloak
+    command: [ "start-dev" ]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8081:8080"
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: veyor_mailhog
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: veyor_prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: veyor_grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+      - loki
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: veyor_jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  loki:
+    image: grafana/loki:latest
+    container_name: veyor_loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+
+  carrier-simulator:
+    build:
+      context: ../carrier-simulator
+      dockerfile: Dockerfile
+    container_name: veyor_carrier_simulator
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - CHAOS_ENABLED=true
+      - FAILURE_RATE=0.05
+
+  quoting-service:
+    build:
+      context: ../quoting-service
+      dockerfile: Dockerfile
+    container_name: veyor_quoting_service
+    ports:
+      - "50051:50051"
+    environment:
+      - GRPC_PORT=50051
+      - CARRIER_MOCK_URL=http://carrier-simulator:3000
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - carrier-simulator
+      - redis
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+
+

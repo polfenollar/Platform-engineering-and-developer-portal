@@ -65,6 +65,7 @@ Veyor is a freight SaaS marketplace connecting shippers with carriers. It uses a
 | Framework | LangChain ReAct agent |
 | Tools | Read-only access to booking/shipment APIs |
 | Tracing | Langsmith integration mandatory |
+| LLM Gateway | MUST route all LLM requests through the LiteLLM Gateway (`http://litellm:4000`). Direct external API calls are prohibited. |
 | Safety | No write operations; no direct DB access |
 
 ## API Contracts

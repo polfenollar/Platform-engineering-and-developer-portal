@@ -57,6 +57,7 @@ Production-grade, self-hosted biomedical evidence synthesis platform using a gov
 | Evidence manifest | Each synthesis includes a manifest listing all sources used |
 | Tool access | Agents access data ONLY via defined LangChain/LangGraph tools |
 | No hallucination | Agents MUST NOT synthesize information not in retrieved documents |
+| LLM Gateway | Agents MUST route ALL inference calls through the LiteLLM Gateway (`http://litellm:4000`). Direct calls to external providers (OpenAI, Anthropic, etc.) are PROHIBITED. |
 
 ## Data Governance Rules
 

@@ -196,6 +196,27 @@ jobs:
       KUBECONFIG: ${{ secrets.KUBECONFIG_DEV }}
 
   # ============================================================
+  # DAST Security Scanning (after dev deploy)
+  # ============================================================
+  dast-veyor:
+    name: DAST / Veyor
+    needs: deploy-veyor-dev
+    if: needs.deploy-veyor-dev.result == 'success'
+    uses: ./.github/workflows/reusable-dast-scan.yml
+    with:
+      project: veyor
+      target_url: 'http://localhost:3000'
+
+  dast-biomedical:
+    name: DAST / BioMedical
+    needs: deploy-biomedical-dev
+    if: needs.deploy-biomedical-dev.result == 'success'
+    uses: ./.github/workflows/reusable-dast-scan.yml
+    with:
+      project: biomedical
+      target_url: 'http://localhost:8000'
+
+  # ============================================================
   # E2E Tests (after dev deploy)
   # ============================================================
   e2e-veyor:
@@ -219,8 +240,11 @@ jobs:
   # ============================================================
   deploy-veyor-staging:
     name: Deploy / Veyor / Staging
-    needs: e2e-veyor
-    if: needs.e2e-veyor.result == 'success'
+    needs: [e2e-veyor, dast-veyor]
+    if: |
+      always() &&
+      needs.e2e-veyor.result == 'success' &&
+      needs.dast-veyor.result == 'success'
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       project: veyor
@@ -231,8 +255,11 @@ jobs:
 
   deploy-biomedical-staging:
     name: Deploy / BioMedical / Staging
-    needs: e2e-biomedical
-    if: needs.e2e-biomedical.result == 'success'
+    needs: [e2e-biomedical, dast-biomedical]
+    if: |
+      always() &&
+      needs.e2e-biomedical.result == 'success' &&
+      needs.dast-biomedical.result == 'success'
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       project: biomedical

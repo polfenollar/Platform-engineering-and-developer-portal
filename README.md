@@ -20,18 +20,21 @@ Both repos are included as Git submodules under `projects/`.
 
 | Category | Tools |
 |---|---|
-| **Developer Portal** | Backstage — service catalog, TechDocs, Scaffolder golden paths |
+| **Developer Portal** | Backstage — service catalog, TechDocs, Scaffolder golden paths, custom RBAC policy backend |
 | **CI/CD** | GitHub Actions — 8 reusable workflows (test, build, deploy, lint, scan) |
 | **Code Quality** | ESLint · Checkstyle · Ruff · golangci-lint |
 | **Testing** | Unit · Integration · E2E (Playwright) · Load (k6) |
-| **Security** | Semgrep · CodeQL · npm audit · pip-audit · Gradle dependency-check |
+| **Security & IAM** | Semgrep · CodeQL · npm audit · pip-audit · Gradle dependency-check · OIDC Workload Identity |
+| **Secrets Management** | OpenBao (Vault) · External Secrets Operator (ESO) |
 | **IaC** | Terraform (AWS free-tier) · Crossplane |
 | **GitOps** | Argo CD (app-of-apps pattern) · Argo Workflows | SAST DAST scanning for vulnerablities 
 | **Containers** | Docker · Kubernetes (kind local / k3s AWS) · Helm |
 | **Service Mesh** | Istio — mTLS, traffic management, circuit breaking |
 | **Observability** | OpenTelemetry · Prometheus · Loki · Grafana · Langsmith |
+| **LLM Gateway** | LiteLLM Proxy — routing, load balancing, cost tracking, governance |
 | **Feature Flags** | Flagsmith (self-hosted) |
-| **AI Agent Guardrails** | Architecture docs + coding standards consumed by AI coding agents |
+| **AI Agent Guardrails**| Architecture + coding standards + strict repository isolation & PR approval boundaries |
+
 
 ---
 
@@ -55,13 +58,41 @@ Both repos are included as Git submodules under `projects/`.
   │  Go (gRPC)  │  │  LangGraph   │  │  Grafana / Loki  │
   │  FastAPI    │  │  Qdrant      │  │  Flagsmith       │
   │  Kafka      │  │  MinIO       │  │  Istio           │
-  └─────────────┘  └──────────────┘  └──────────────────┘
-         │                 │
-         └─────────────────┘
+  └──────┬──────┘  └──────┬───────┘  │  LiteLLM Proxy   │
+         │                │          │  OpenBao + ESO   │
+         └────────────────┘          └──────────────────┘
                   │
          Kubernetes (kind / k3s / EKS)
          Terraform · Crossplane · Helm
 ```
+
+---
+
+## Implementation Phases
+
+The platform rollout is structured into three progressive phases:
+
+### Phase 1: Platform Foundation
+Establishing the core developer experience and operational reliability.
+- Backstage Developer Portal & Service Catalog
+- Kubernetes infrastructure (kind / AWS k3s)
+- GitHub Actions CI/CD pipelines
+- GitOps with Argo CD & Argo Workflows
+- Istio Service Mesh & OpenTelemetry Observability
+
+### Phase 2: Security & Governance (Current)
+Enforcing strict boundaries and secure access patterns.
+- Custom RBAC policies in Backstage
+- Centralized Secrets Management via OpenBao and External Secrets Operator (ESO)
+- LiteLLM Gateway for LLM cost tracking, proxying, and API key governance
+- Dependency & SAST scanning integration
+
+### Phase 3: Advanced AI Agent Workflows
+Maturing the integration of autonomous agents.
+- Golden Paths & Scaffolder templates
+- Deterministic multi-agent workflows (LangGraph & Temporal)
+- Strict AI agent repository isolation and branch protection
+- AI Agent Architecture Guidelines
 
 ---
 

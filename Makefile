@@ -188,6 +188,26 @@ deploy-litellm: ## Deploy LiteLLM Proxy gateway
 	kubectl apply -f platform/llm-gateway/deployment.yml
 	@echo "✅ LiteLLM deployed."
 
+# --- Policy & Security Checks ---
+.PHONY: policy-check
+policy-check: ## Validate Kubernetes manifests with Kyverno CLI
+	@echo "🔍 Running Kyverno policy checks..."
+	@RESOURCES="platform/llm-gateway/deployment.yml platform/feature-flags/flipt-deployment.yml platform/secrets/openbao/deployment.yml platform/secrets/external-secrets/deployment.yml platform/observability/fluentbit/deployment.yml platform/observability/langfuse/deployment.yml platform/observability/otel-collector/deployment.yml platform/observability/rollback-controller/deployment.yml"; \
+	if ! command -v kyverno >/dev/null 2>&1; then \
+		echo "Downloading Kyverno CLI..."; \
+		curl -LO https://github.com/kyverno/kyverno/releases/download/v1.12.3/kyverno-cli_v1.12.3_darwin_x86_64.tar.gz; \
+		tar -zxf kyverno-cli_v1.12.3_darwin_x86_64.tar.gz; \
+		./kyverno apply platform/governance/kyverno/policies/ --resource $$RESOURCES; \
+		rm -f ./kyverno kyverno-cli_v1.12.3_darwin_x86_64.tar.gz; \
+	else \
+		kyverno apply platform/governance/kyverno/policies/ --resource $$RESOURCES; \
+	fi
+
+.PHONY: dast-scan
+dast-scan: ## Run OWASP ZAP DAST scan on target URL (usage: make dast-scan target_url=http://localhost:3000)
+	@echo "🛡️ Running OWASP ZAP DAST scan against $(target_url)..."
+	docker run -t owasp/zap2docker-stable zap-baseline.py -t $(target_url) -d
+
 # --- Docker ---
 .PHONY: docker-build
 docker-build: ## Build all Docker images

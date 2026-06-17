@@ -1,0 +1,30 @@
+# Reusable — DAST scan workflow
+# Source of truth: platform/github-actions/dast-scan.yml (kept in sync)
+name: DAST Scan
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project to scan (veyor or biomedical)'
+        required: true
+        type: string
+      target_url:
+        description: 'Base URL of the target to scan'
+        required: true
+        type: string
+
+jobs:
+  dast:
+    name: OWASP ZAP DAST Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target: ${{ inputs.target_url }}
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+          fail_action: false

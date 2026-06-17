@@ -1,0 +1,19 @@
+[project]
+name = "python-microservice"
+version = "0.1.0"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "pydantic>=2.6.0",
+    "structlog>=24.1.0",
+    "opentelemetry-api>=1.23.0",
+    "opentelemetry-sdk>=1.23.0",
+    "opentelemetry-instrumentation-fastapi>=0.44b0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "I", "N"]

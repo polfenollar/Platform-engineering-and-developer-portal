@@ -1,0 +1,2 @@
+langgraph>=0.0.10
+langchain-openai>=0.0.8

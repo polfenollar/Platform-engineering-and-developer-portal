@@ -26,7 +26,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: projects/veyor-marketplace/frontend/package-lock.json
       - run: cd projects/veyor-marketplace/frontend && npm ci
-      - run: cd projects/veyor-marketplace/frontend && npm test -- --coverage --watchAll=false
+      - name: Run tests with 80% coverage threshold
+        run: cd projects/veyor-marketplace/frontend && npm test -- --coverage --watchAll=false --coverageThreshold='{"global":{"lines":80}}'
       - uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
@@ -68,7 +69,7 @@ jobs:
             cd projects/veyor-marketplace/agents
             pip install -r requirements.txt
             pip install pytest pytest-cov
-            python -m pytest tests/ -v --cov=. --cov-report=xml
+            python -m pytest tests/ -v --cov=. --cov-report=xml --cov-fail-under=80
           else
             echo "agents not yet in repo, skipping"
           fi
@@ -98,7 +99,14 @@ jobs:
               echo "Testing $svc..."
               cd "$dir"
               go test ./... -v -race -coverprofile=coverage.out
-              go tool cover -func=coverage.out
+              coverage=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+              echo "$svc Coverage: $coverage%"
+              if [ ! -z "$coverage" ]; then
+                if awk "BEGIN {exit !($coverage < 80.0)}"; then
+                  echo "❌ Code coverage is $coverage%, which is below the 80% threshold!"
+                  exit 1
+                fi
+              fi
               cd -
             else
               echo "$svc not yet in repo, skipping"

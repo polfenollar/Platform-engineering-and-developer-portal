@@ -77,19 +77,58 @@ spec:
           default: 8080
 
   steps:
-    - id: fetch-skeleton
-      name: Fetch Skeleton
+    - id: fetch-base
+      name: Fetch Base Skeleton
       action: fetch:template
       input:
-        url: ./skeleton
+        url: ./new-microservice/skeleton-base
         values:
           name: ${{ parameters.name }}
           description: ${{ parameters.description }}
-          language: ${{ parameters.language }}
           project: ${{ parameters.project }}
           port: ${{ parameters.port }}
           needsDatabase: ${{ parameters.needsDatabase }}
           needsCache: ${{ parameters.needsCache }}
+          needsMessageQueue: ${{ parameters.needsMessageQueue }}
+
+    - id: fetch-python
+      name: Fetch Python Skeleton
+      action: fetch:template
+      if: ${{ parameters.language == 'python' }}
+      input:
+        url: ./new-microservice/skeleton-python
+        values:
+          name: ${{ parameters.name }}
+          needsDatabase: ${{ parameters.needsDatabase }}
+          needsCache: ${{ parameters.needsCache }}
+          needsMessageQueue: ${{ parameters.needsMessageQueue }}
+
+    - id: fetch-go
+      name: Fetch Go Skeleton
+      action: fetch:template
+      if: ${{ parameters.language == 'go' }}
+      input:
+        url: ./new-microservice/skeleton-go
+        values:
+          name: ${{ parameters.name }}
+
+    - id: fetch-java
+      name: Fetch Java Skeleton
+      action: fetch:template
+      if: ${{ parameters.language == 'java' }}
+      input:
+        url: ./new-microservice/skeleton-java
+        values:
+          name: ${{ parameters.name }}
+
+    - id: fetch-typescript
+      name: Fetch TypeScript Skeleton
+      action: fetch:template
+      if: ${{ parameters.language == 'typescript' }}
+      input:
+        url: ./new-microservice/skeleton-typescript
+        values:
+          name: ${{ parameters.name }}
 
     - id: publish-github
       name: Publish to GitHub
@@ -189,17 +228,57 @@ spec:
               - file-reader
 
   steps:
-    - id: fetch-skeleton
-      name: Fetch Agent Skeleton
+    - id: fetch-base
+      name: Fetch Agent Base Skeleton
       action: fetch:template
       input:
-        url: ./skeleton
+        url: ./new-ai-agent/skeleton-base
         values:
           name: ${{ parameters.name }}
-          framework: ${{ parameters.agentFramework }}
+          description: ${{ parameters.description }}
+          project: ${{ parameters.project }}
+
+    - id: fetch-langchain-react
+      name: Fetch LangChain ReAct Skeleton
+      action: fetch:template
+      if: ${{ parameters.agentFramework == 'langchain-react' }}
+      input:
+        url: ./new-ai-agent/skeleton-langchain-react
+        values:
+          name: ${{ parameters.name }}
           project: ${{ parameters.project }}
           enableLangsmith: ${{ parameters.enableLangsmith }}
-          enableTemporal: ${{ parameters.enableTemporal }}
+
+    - id: fetch-langgraph
+      name: Fetch LangGraph Skeleton
+      action: fetch:template
+      if: ${{ parameters.agentFramework == 'langgraph' }}
+      input:
+        url: ./new-ai-agent/skeleton-langgraph
+        values:
+          name: ${{ parameters.name }}
+          project: ${{ parameters.project }}
+          enableLangsmith: ${{ parameters.enableLangsmith }}
+
+    - id: fetch-crewai
+      name: Fetch CrewAI Skeleton
+      action: fetch:template
+      if: ${{ parameters.agentFramework == 'crewai' }}
+      input:
+        url: ./new-ai-agent/skeleton-crewai
+        values:
+          name: ${{ parameters.name }}
+          project: ${{ parameters.project }}
+          enableLangsmith: ${{ parameters.enableLangsmith }}
+
+    - id: fetch-temporal
+      name: Fetch Temporal Workflow Addon
+      action: fetch:template
+      if: ${{ parameters.enableTemporal }}
+      input:
+        url: ./new-ai-agent/skeleton-temporal
+        values:
+          name: ${{ parameters.name }}
 
     - id: publish-github
       name: Publish to GitHub
@@ -264,13 +343,14 @@ spec:
           default: css-modules
 
   steps:
-    - id: fetch-skeleton
-      name: Fetch Frontend Skeleton
+    - id: fetch-base
+      name: Fetch Frontend Base Skeleton
       action: fetch:template
       input:
-        url: ./skeleton
+        url: ./new-frontend/skeleton-base
         values:
           name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
           styling: ${{ parameters.styling }}
 
     - id: publish-github
@@ -342,13 +422,14 @@ spec:
           default: true
 
   steps:
-    - id: fetch-skeleton
-      name: Fetch Pipeline Skeleton
+    - id: fetch-base
+      name: Fetch Pipeline Base Skeleton
       action: fetch:template
       input:
-        url: ./skeleton
+        url: ./new-data-pipeline/skeleton-base
         values:
           name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
           dataSource: ${{ parameters.dataSource }}
           qualityChecks: ${{ parameters.qualityChecks }}
 
