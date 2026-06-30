@@ -1,8 +1,7 @@
 # ==============================================================================
-# Stage 1 — Task 1.1: OpenBao Deployment
-# OpenBao is the Linux Foundation fork of HashiCorp Vault (MPL-2.0).
-# Dev mode: single replica, auto-unseal (for local/CI only).
-# Production: switch to HA + integrated Raft storage.
+# Phase 1: OpenBao HA StatefulSet
+# Migrated to StatefulSet with 3 replicas and dynamic PVCs.
+# Dev mode retained as requested (auto-unseal active).
 # ==============================================================================
 apiVersion: v1
 kind: ServiceAccount
@@ -39,30 +38,52 @@ metadata:
     app.kubernetes.io/part-of: platform
 data:
   openbao.hcl: |
-    # ===========================================================
-    # OpenBao server config
-    # ENV: dev mode (auto-unseal, in-memory). Switch to raft for prod.
-    # ===========================================================
     ui = true
 
     listener "tcp" {
       address     = "0.0.0.0:8200"
-      tls_disable = 1   # TLS terminated at Istio mTLS layer
+      cluster_address = "0.0.0.0:8201"
+      tls_disable = 1
     }
 
-    # Development backend — single node, in-memory
-    # For production replace with:
-    #   storage "raft" {
-    #     path = "/openbao/data"
-    #     node_id = "openbao-0"
-    #   }
-    storage "inmem" {}
+    storage "raft" {
+      path = "/openbao/data"
+      retry_join {
+        leader_api_addr = "http://openbao-0.openbao-internal.platform.svc.cluster.local:8200"
+      }
+      retry_join {
+        leader_api_addr = "http://openbao-1.openbao-internal.platform.svc.cluster.local:8200"
+      }
+      retry_join {
+        leader_api_addr = "http://openbao-2.openbao-internal.platform.svc.cluster.local:8200"
+      }
+    }
 
     api_addr     = "http://openbao.platform.svc.cluster.local:8200"
     cluster_addr = "https://openbao.platform.svc.cluster.local:8201"
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: openbao-internal
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: openbao
+    app.kubernetes.io/part-of: platform
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: openbao
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+    - name: cluster
+      port: 8201
+      targetPort: 8201
+---
+apiVersion: v1
+kind: Service
 metadata:
   name: openbao
   namespace: platform
@@ -70,7 +91,27 @@ metadata:
     app.kubernetes.io/name: openbao
     app.kubernetes.io/part-of: platform
 spec:
-  replicas: 1
+  selector:
+    app.kubernetes.io/name: openbao
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+    - name: cluster
+      port: 8201
+      targetPort: 8201
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: openbao
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: openbao
+    app.kubernetes.io/part-of: platform
+spec:
+  serviceName: openbao-internal
+  replicas: 3
   selector:
     matchLabels:
       app.kubernetes.io/name: openbao
@@ -91,9 +132,10 @@ spec:
           command:
             - bao
             - server
-            - -dev                         # Auto-unseal; remove for production
-            - -dev-root-token-id=root      # Fixed dev token; use proper auth for prod
+            - -dev                         # Auto-unseal explicitly requested
+            - -dev-root-token-id=root
             - -dev-listen-address=0.0.0.0:8200
+            - -config=/openbao/config/openbao.hcl
           ports:
             - containerPort: 8200
               name: http
@@ -127,34 +169,23 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /openbao/config
+            - name: data
+              mountPath: /openbao/data
       volumes:
         - name: config
           configMap:
             name: openbao-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: openbao
-  namespace: platform
-  labels:
-    app.kubernetes.io/name: openbao
-    app.kubernetes.io/part-of: platform
-spec:
-  selector:
-    app.kubernetes.io/name: openbao
-  ports:
-    - name: http
-      port: 8200
-      targetPort: 8200
-    - name: cluster
-      port: 8201
-      targetPort: 8201
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
 ---
 # ==============================================================================
-# OpenBao Init Job — Seeds secrets into OpenBao on first run.
-# Writes the secret paths that ESO's ExternalSecret CRs will reference.
-# This job is idempotent: safe to re-run.
+# OpenBao Init Job
 # ==============================================================================
 apiVersion: batch/v1
 kind: Job
@@ -187,66 +218,27 @@ spec:
               echo "🔑 Seeding secrets into OpenBao KV store..."
               bao secrets enable -path=secret kv-v2 2>/dev/null || true
 
-              # --- Flipt Database ---
-              bao kv put secret/platform/flipt-db \
-                POSTGRES_PASSWORD="${FLIPT_DB_PASSWORD}"
-
-              # --- LiteLLM API Keys ---
-              bao kv put secret/platform/litellm \
-                OPENAI_API_KEY="${OPENAI_API_KEY}" \
-                ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
-                GEMINI_API_KEY="${GEMINI_API_KEY}" \
-                LITELLM_MASTER_KEY="${LITELLM_MASTER_KEY}"
-
-              # --- LiteLLM Database ---
-              bao kv put secret/platform/litellm-db \
-                POSTGRES_PASSWORD="${LITELLM_DB_PASSWORD}"
-
-              # --- GitHub Token (rollback controller) ---
-              bao kv put secret/platform/github \
-                token="${GITHUB_TOKEN}"
+              bao kv put secret/platform/flipt-db POSTGRES_PASSWORD="${FLIPT_DB_PASSWORD}"
+              bao kv put secret/platform/litellm OPENAI_API_KEY="${OPENAI_API_KEY}" ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" GEMINI_API_KEY="${GEMINI_API_KEY}" LITELLM_MASTER_KEY="${LITELLM_MASTER_KEY}"
+              bao kv put secret/platform/litellm-db POSTGRES_PASSWORD="${LITELLM_DB_PASSWORD}"
+              bao kv put secret/platform/github token="${GITHUB_TOKEN}"
 
               echo "✅ All secrets seeded successfully"
           env:
             - name: FLIPT_DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: bootstrap-secrets
-                  key: flipt-db-password
+              valueFrom: { secretKeyRef: { name: bootstrap-secrets, key: flipt-db-password } }
             - name: OPENAI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: bootstrap-secrets
-                  key: openai-api-key
+              valueFrom: { secretKeyRef: { name: bootstrap-secrets, key: openai-api-key } }
             - name: ANTHROPIC_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: bootstrap-secrets
-                  key: anthropic-api-key
+              valueFrom: { secretKeyRef: { name: bootstrap-secrets, key: anthropic-api-key } }
             - name: GEMINI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: bootstrap-secrets
-                  key: gemini-api-key
+              valueFrom: { secretKeyRef: { name: bootstrap-secrets, key: gemini-api-key } }
             - name: LITELLM_MASTER_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: bootstrap-secrets
-                  key: litellm-master-key
+              valueFrom: { secretKeyRef: { name: bootstrap-secrets, key: litellm-master-key } }
             - name: LITELLM_DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: bootstrap-secrets
-                  key: litellm-db-password
+              valueFrom: { secretKeyRef: { name: bootstrap-secrets, key: litellm-db-password } }
             - name: GITHUB_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: bootstrap-secrets
-                  key: github-token
+              valueFrom: { secretKeyRef: { name: bootstrap-secrets, key: github-token } }
           resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 128Mi }
