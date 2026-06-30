@@ -1,0 +1,61 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-non-root-user
+  annotations:
+    policies.kyverno.io/title: Require Non-Root User
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Containers must be required to run as non-root users. This policy ensures
+      `runAsNonRoot` is set to `true` and a `runAsUser` greater than 0 is specified.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: check-runasnonroot
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Running as root is not allowed. The container must have runAsNonRoot: true.
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+            =(containers):
+              - =(securityContext):
+                  =(runAsNonRoot): true
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-image-registries
+  annotations:
+    policies.kyverno.io/title: Restrict Image Registries
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      This policy ensures that images can only be pulled from approved registries.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: validate-registries
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Images must be pulled from authorized registries.
+        pattern:
+          spec:
+            containers:
+              - image: "ghcr.io/* | public.ecr.aws/* | docker.io/* | quay.io/*"
+            =(initContainers):
+              - image: "ghcr.io/* | public.ecr.aws/* | docker.io/* | quay.io/*"
