@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Grid,
   Card,
@@ -21,10 +21,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
 } from '@material-ui/core';
 import AttachMoneyIcon from '@material-ui/icons/AttachMoney';
 import AssignmentIndIcon from '@material-ui/icons/AssignmentInd';
@@ -421,7 +417,7 @@ export function LlmGovernanceDashboard() {
                 <Typography variant="subtitle2" style={{ fontWeight: 600, marginBottom: '8px' }}>
                   Literature Synthesis Agent Routing Mode
                 </Typography>
-                <Box display="flex" flexDirection="column" gap="8px">
+                <Box display="flex" flexDirection="column" style={{ gap: '8px' }}>
                   <Button
                     variant={activeRouting === 'Anthropic' ? 'contained' : 'outlined'}
                     style={{

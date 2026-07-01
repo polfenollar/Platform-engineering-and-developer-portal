@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Grid,
   Card,
@@ -16,11 +16,8 @@ import {
   LinearProgress,
   Chip,
   makeStyles,
-  Tooltip,
 } from '@material-ui/core';
 import CheckCircleIcon from '@material-ui/icons/CheckCircle';
-import CancelIcon from '@material-ui/icons/Cancel';
-import HelpOutlineIcon from '@material-ui/icons/HelpOutline';
 import AutorenewIcon from '@material-ui/icons/Autorenew';
 import WarningIcon from '@material-ui/icons/Warning';
 import CloudQueueIcon from '@material-ui/icons/CloudQueue';
@@ -491,7 +488,7 @@ export function AgentObservabilityDashboard() {
               <Typography variant="body2" color="textSecondary" style={{ marginBottom: '20px' }}>
                 Simulate a production-grade automated rollback. If Prometheus detects an error rate above 5% on an active agent, it triggers Alertmanager which sends a webhook to the custom Rollback Controller. The controller automatically commits a state reversion directly to the GitOps repository.
               </Typography>
-              <Box display="flex" gap="16px">
+              <Box display="flex" style={{ gap: '16px' }}>
                 <Button
                   variant="contained"
                   className={classes.alertBtn}

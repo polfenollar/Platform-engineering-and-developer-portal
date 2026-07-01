@@ -56,9 +56,13 @@ class RoleBasedPermissionPolicy implements PermissionPolicy {
       return { result: AuthorizeResult.ALLOW };
     }
 
-    // 4. Default Posture for standard developers
-    // Allow reading, registering, updating, etc.
-    // However, if the operation is a write or delete of a non-catalog resource, we default-deny for safety.
+    // 4. Default Posture for standard developers & guests
+    // Guests are blocked from all write actions (create, update, delete)
+    if (isGuest && (request.permission.attributes?.action === 'create' || request.permission.attributes?.action === 'update' || request.permission.attributes?.action === 'delete')) {
+      this.logger.warn(`Permission denied: Guest user attempted write operation: ${request.permission.name}`);
+      return { result: AuthorizeResult.DENY };
+    }
+
     if (request.permission.attributes?.action === 'delete' || request.permission.attributes?.action === 'update') {
       this.logger.warn(`Permission denied: Non-admin attempted write/delete on non-owned resource: ${request.permission.name}`);
       return { result: AuthorizeResult.DENY };
@@ -67,6 +71,7 @@ class RoleBasedPermissionPolicy implements PermissionPolicy {
     return { result: AuthorizeResult.ALLOW };
   }
 }
+
 
 export default createBackendModule({
   pluginId: 'permission',
