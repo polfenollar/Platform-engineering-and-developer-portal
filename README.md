@@ -151,10 +151,10 @@ Both repos are included as Git submodules under `projects/`.
 | **CI/CD** | GitHub Actions — 8 reusable workflows (test, build, deploy, lint, scan) |
 | **Code Quality** | ESLint · Checkstyle · Ruff · golangci-lint |
 | **Testing** | Unit · Integration · E2E (Playwright) · Load (k6) |
-| **Security & IAM** | Semgrep · CodeQL · npm audit · pip-audit · Gradle dependency-check · OIDC Workload Identity |
+| **Security & IAM** | Microsoft Entra ID (SSO & Graph sync) · OIDC Workload Identity · Semgrep · CodeQL · dependency-check |
 | **Secrets Management** | OpenBao (Vault) · External Secrets Operator (ESO) |
 | **IaC** | Terraform (AWS free-tier) · Crossplane |
-| **GitOps** | Argo CD (app-of-apps pattern) · Argo Workflows | SAST DAST scanning for vulnerablities 
+| **GitOps** | Argo CD (app-of-apps pattern) · Argo Workflows | SAST DAST scanning for vulnerabilities 
 | **Containers** | Docker · Kubernetes (kind local / k3s AWS) · Helm |
 | **Service Mesh** | Istio — mTLS, traffic management, circuit breaking |
 | **Observability** | OpenTelemetry · Prometheus · Loki · Grafana · Langsmith |
@@ -168,58 +168,90 @@ Both repos are included as Git submodules under `projects/`.
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Developer Portal                         │
-│                    Backstage (port 3000)                        │
-│         Service Catalog · TechDocs · Scaffolder Templates       │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-         ┌─────────────────┼─────────────────┐
-         ▼                 ▼                 ▼
-  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐
-  │  Veyor      │  │  BioMedical  │  │  Platform Layer  │
-  │  Marketplace│  │  AI          │  │                  │
-  │             │  │              │  │  Argo CD         │
-  │  Next.js    │  │  FastAPI     │  │  OTel Collector  │
-  │  Spring Boot│  │  Temporal    │  │  Prometheus      │
-  │  Go (gRPC)  │  │  LangGraph   │  │  Grafana / Loki  │
-  │  FastAPI    │  │  Qdrant      │  │  Flagsmith       │
-  │  Kafka      │  │  MinIO       │  │  Istio           │
-  └──────┬──────┘  └──────┬───────┘  │  LiteLLM Proxy   │
-         │                │          │  OpenBao + ESO   │
-         └────────────────┘          └──────────────────┘
-                  │
-         Kubernetes (kind / k3s / EKS)
-         Terraform · Crossplane · Helm
+   ┌──────────────────────────────────────────────────────────┐
+   │                  Microsoft Entra ID                      │
+   │           (SSO, Identity Claims & Group Sync)            │
+   └──────────────────────────┬───────────────────────────────┘
+                              │ OIDC / MS Graph
+   ┌──────────────────────────▼───────────────────────────────┐
+   │                  Backstage Developer Portal              │
+   │               (Software Catalog & Scaffolder)            │
+   │   Enforces group-based template access in rbacPolicy     │
+   └──────────────────────────┬───────────────────────────────┘
+                              │ Provisioning (K8s ServiceAccount)
+            ┌─────────────────┼─────────────────┐
+            ▼                 ▼                 ▼
+     ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐
+     │  Veyor      │  │  BioMedical  │  │  Platform Layer  │
+     │  Marketplace│  │  AI          │  │                  │
+     │             │  │              │  │  Argo CD         │
+     │  Next.js    │  │  FastAPI     │  │  OTel Collector  │
+     │  Spring Boot│  │  Temporal    │  │  Prometheus      │
+     │  Go (gRPC)  │  │  LangGraph   │  │  Grafana / Loki  │
+     │  FastAPI    │  │  Qdrant      │  │  Flagsmith       │
+     │  Kafka      │  │  MinIO       │  │  Istio           │
+     └──────┬──────┘  └──────┬───────┘  │  LiteLLM Proxy   │
+            │                │          │  OpenBao + ESO   │
+            └────────────────┘          └──────────────────┘
+                     │
+            Kubernetes (annotated ServiceAccounts)
+            Workload Identity OIDC Trust Federation (AWS / Azure)
 ```
 
 ---
 
-## Implementation Phases
+## GitOps & Platform Architecture (Day 2)
 
-The platform rollout is structured into three progressive phases:
+### 1. Repository Re-Architecture (Preventing Brittle Monorepos)
+Coupling the portal application with cluster manifests is strictly prohibited. The system is split into three independent repositories with decoupled lifecycles:
+- **`developer-portal` (Repository A):** Backstage Code (Node.js/React), UI, backend plugin logic, and RBAC code.
+- **`platform-infra-gitops` (Repository B):** Cluster Brain. K8s Manifests, Argo CD Custom Resources, and desired state definition.
+- **`golden-path-templates` (Repository C):** Scaffolder Skeletons. Read-only base templates for microservice generation.
 
-### Phase 1: Platform Foundation
-Establishing the core developer experience and operational reliability.
-- Backstage Developer Portal & Service Catalog
-- Kubernetes infrastructure (kind / AWS k3s)
-- GitHub Actions CI/CD pipelines
-- GitOps with Argo CD & Argo Workflows
-- Istio Service Mesh & OpenTelemetry Observability
+### 2. Infrastructure Line of Demarcation
+To prevent state collisions, we enforce a strict boundary based on resource lifecycle:
+- **Static Layer (Day 0/1) via Terraform:** Foundational resources (VPC, EKS/k3s, global RDS, IAM). Outputs are exported to system configuration or cluster secrets.
+- **Dynamic Layer (Day 2) via Crossplane:** Application-specific on-demand resources (logical app DBs, SQS, S3). Developers request these via K8s manifests using Crossplane CRDs, assumed by Day 1 IAM roles.
 
-### Phase 2: Security & Governance (Current)
-Enforcing strict boundaries and secure access patterns.
-- Custom RBAC policies in Backstage
-- Centralized Secrets Management via OpenBao and External Secrets Operator (ESO)
-- LiteLLM Gateway for LLM cost tracking, proxying, and API key governance
-- Dependency & SAST scanning integration
+### 3. Low-Latency Auto-Healing Loop Architecture (Anti-Drift)
+Git is the strict Single Source of Truth.
+- **Fast-Path Mitigation:** Prometheus detects anomalies (e.g. error spikes from a feature flag) -> Alertmanager groups alerts -> Rollback Controller executes an automated signed commit toggling the flag in `platform-infra-gitops` and pushes to `main` -> GitHub Webhook triggers Argo CD flash reconciliation (< 3 seconds target).
+- **Slow-Path Synchronization:** Rollback Controller automatically opens an Issue and PR in the application code repository proposing a revert, attaching Prometheus logs.
 
-### Phase 3: Advanced AI Agent Workflows
-Maturing the integration of autonomous agents.
-- Golden Paths & Scaffolder templates
-- Deterministic multi-agent workflows (LangGraph & Temporal)
-- Strict AI agent repository isolation and branch protection
-- AI Agent Architecture Guidelines
+---
+
+## Implementation Phases (Execution Roadmap)
+
+Strictly follow this phase execution order. **CRITICAL REQUIREMENT:** Before moving from one phase to the following one, you must upload to Git and merge to the `main` branch to guarantee development stability.
+
+### Phase 0: Emergency Hardening
+Stable base networks, namespace segregation via NetworkPolicies, clean configuration of OTel Collector daemonsets, and base alert triggers in Prometheus.
+- **Verification:** `kubectl get ds otel-collector -n observability`
+- **Gate:** Commit & Merge to `main`.
+
+### Phase 1: Secrets & Persistence
+High-availability OpenBao deployment. External Secrets Operator (ESO) CRD configuration. Migration of StatefulSets to dynamic StorageClasses with PVCs. Replacing Redis with Valkey.
+- **Verification:** `kubectl get externalsecrets.external-secrets.io -A`
+- **Gate:** Commit & Merge to `main`.
+
+### Phase 2: Policy & CI Gates
+Integration of restrictive policies into the Kyverno Admission Controller. Creation of the unified CI pipeline in GitHub Actions with automatic blocks on Gitleaks detection and Semgrep/Trivy failures.
+- **Verification:** `kyverno test core/kyverno-policies/`
+- **Gate:** Commit & Merge to `main`.
+
+### Phase 3: Portal Integration
+Deployment of `developer-portal`. Implementation of React dashboards for Agent Observability and LLM Governance. Loading base catalogs and initializing code Golden Paths.
+- **Verification:** `yarn --cwd backstage-app tsc`
+- **Gate:** Commit & Merge to `main`.
+
+### Phase 4: Async Logging
+Optimization of the observability plane. Configuring FluentBit's persistent buffer. Deploying the LiteLLM proxy in async mode and ensuring secure connectivity with Langfuse DB.
+- **Verification:** `kubectl logs -l app.kubernetes.io/name=fluentbit -n observability`
+- **Gate:** Commit & Merge to `main`.
+
+### Phase 5: Webhook Hardening (Auto-Healing)
+Implementation and deployment of the Rollback Controller daemon. Configuration of Argo CD's fast webhook endpoint. Connecting the Alertmanager trigger to the automated controller.
+- **Gate:** Commit & Merge to `main`.
 
 ---
 
@@ -364,22 +396,28 @@ make deploy-prod        # Deploy to production (requires approval)
 
 ---
 
-## CI/CD Pipeline
+## CI/CD Pipeline & Multi-Agent Delivery
 
-Every pull request runs automatically:
+Every pull request runs automatically through a rigorous pipeline. We mandate an automated testing threshold of **80% unit test coverage**, alongside integration, load, E2E, and shadow testing before production rollout.
+
+Furthermore, we utilize an AI-driven Multi-Agent delivery pipeline:
+- **Chief Architect (Claude Opus):** Orchestration agent responsible for high-level system design and directing implementers.
+- **Implementers (Claude Sonnet):** On-demand agents functioning as platform engineers and developers to execute the architecture.
 
 ```
-PR opened
+PR opened (Agent/Human)
     │
     ├── lint          ESLint · Checkstyle · Ruff · golangci-lint
-    ├── test-unit     Jest · JUnit · pytest · Go test
+    ├── test-unit     Jest · JUnit · pytest · Go test (Must be > 80% coverage)
     ├── test-integration
     ├── sast-scan     Semgrep · CodeQL · dependency audits
+    ├── test-e2e      Playwright automated UI workflows
+    ├── test-load     k6 load testing
     └── build-docker  Multi-service image matrix build
               │
               └── (merge to main)
                         │
-                        └── deploy → dev → staging → prod (gated)
+                        └── deploy → dev → staging → shadow testing → prod (gated)
 ```
 
 All workflows are defined as reusable GitHub Actions in `platform/github-actions/` and called from each project's `.github/workflows/`.
@@ -402,17 +440,19 @@ make argocd-apps       # Apply app-of-apps manifest
 
 ---
 
-## Observability
+## Observability (High-Volume AI Mesh)
 
-The full observability stack is deployed as Kubernetes manifests:
+The full observability stack is deployed as Kubernetes manifests, specifically designed to handle high-volume LLM traces without causing network degradation or memory exhaustion:
 
 | Tool | Purpose | Port |
 |---|---|---|
 | OpenTelemetry Collector | Receives traces/metrics/logs from all services | 4317 (gRPC), 4318 (HTTP) |
 | Prometheus | Metrics scraping and storage | 9090 |
-| Loki | Log aggregation | 3100 |
+| Loki | Log aggregation (Traditional System Metrics & Indexes) | 3100 |
 | Grafana | Dashboards and alerting | 30030 |
-| Langsmith | LLM trace observability | cloud |
+| FluentBit | Collection Agent (DaemonSet). Configured with **persistent disk buffers** (`storage.path`) to mitigate backpressure if Loki experiences latency. | n/a |
+| LiteLLM Proxy | Asynchronous LLM routing and governance. Writes structured JSON directly to `stdout` to avoid blocking inference threads. | 4000 |
+| Langfuse | Isolated Complex AI Traces. Captures tokens, latency, embeddings, and cost in a dedicated PostgreSQL/ClickHouse DB. | cloud |
 
 All services emit traces via OTLP. Grafana dashboards are pre-configured for each service.
 
@@ -424,15 +464,19 @@ All services emit traces via OTLP. Grafana dashboards are pre-configured for eac
 
 ---
 
-## AI Agent Guardrails
+## AI Agent Guardrails & Orchestration
 
-The `golden-paths/agent-guardrails/` directory contains markdown documents consumed directly by AI coding agents (Claude, Cursor, etc.) as context. They define:
+The `golden-paths/agent-guardrails/` directory contains markdown documents consumed directly by our AI coding agents. Following the Chief Architect / Implementer model:
 
+- **Orchestrator Role:** Claude Opus consumes these guardrails to validate the system design.
+- **Implementer Role:** Claude Sonnet consumes these guardrails to execute code changes.
+
+Guardrail Documents:
 - **AGENT_INSTRUCTIONS.md** — Mandatory 11-step workflow every agent must follow before opening a PR
 - **ARCHITECTURE_VEYOR.md** — Module boundaries, service contracts, event schemas
 - **ARCHITECTURE_BIOMEDICAL.md** — Data flow, agent patterns, lakehouse design
 - **CODING_STANDARDS.md** — Language-specific conventions (TypeScript, Java, Go, Python)
-- **TESTING_STRATEGY.md** — Testing pyramid and coverage requirements per service
+- **TESTING_STRATEGY.md** — Testing pyramid, shadow testing, and **80% coverage requirements**
 - **SECURITY_GUARDRAILS.md** — OWASP top-10 rules, secret management, scanning requirements
 - **INFRASTRUCTURE_GUARDRAILS.md** — Kubernetes namespace strategy, Terraform module rules
 - **PR_CHECKLIST.md** — Pre-merge validation checklist
