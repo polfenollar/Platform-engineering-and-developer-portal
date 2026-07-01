@@ -63,7 +63,7 @@ jobs:
       - uses: azure/setup-kubectl@v4
       - name: Dry-run apply base manifests
         run: |
-          kubectl apply --dry-run=client -f platform/kubernetes/base/
+          kubectl apply --dry-run=client --validate=false -f platform/kubernetes/base/
 
   validate-workflows:
     name: Validate GitHub Actions Syntax

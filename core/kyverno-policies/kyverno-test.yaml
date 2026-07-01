@@ -1,0 +1,27 @@
+# core/kyverno-policies/kyverno-test.yaml
+name: global-policies-test
+policies:
+  - global-policies.yml
+resources:
+  - test-resources.yml
+results:
+  - policy: require-non-root-user
+    rule: check-runasnonroot
+    resource: pass-pod
+    kind: Pod
+    result: pass
+  - policy: require-non-root-user
+    rule: check-runasnonroot
+    resource: fail-root-pod
+    kind: Pod
+    result: fail
+  - policy: restrict-image-registries
+    rule: validate-registries
+    resource: pass-pod
+    kind: Pod
+    result: pass
+  - policy: restrict-image-registries
+    rule: validate-registries
+    resource: fail-registry-pod
+    kind: Pod
+    result: fail

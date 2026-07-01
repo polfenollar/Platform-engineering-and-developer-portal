@@ -1,0 +1,36 @@
+# core/kyverno-policies/test-resources.yml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pass-pod
+spec:
+  securityContext:
+    runAsNonRoot: true
+  containers:
+    - name: app
+      image: ghcr.io/org/app:latest
+      securityContext:
+        runAsNonRoot: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-root-pod
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/org/app:latest
+      # Missing runAsNonRoot: true -> should fail
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-registry-pod
+spec:
+  securityContext:
+    runAsNonRoot: true
+  containers:
+    - name: app
+      image: evil-registry.com/org/app:latest # Unauthorized registry -> should fail
+      securityContext:
+        runAsNonRoot: true
